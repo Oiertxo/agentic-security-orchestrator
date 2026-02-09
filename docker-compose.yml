@@ -1,0 +1,35 @@
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: docker/Orchestrator.dockerfile
+    container_name: orchestrator_container
+    volumes:
+      - .:/app
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - MODEL_NAME=hermes3
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - internal_network
+
+  # kali-tools:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Kali.dockerfile
+  #   container_name: kali-tools-container
+  #   networks:
+  #     - internal_network
+  #   tty: true
+
+networks:
+  internal_network:
+    driver: bridge

@@ -1,0 +1,9 @@
+# requirements.txt
+langgraph
+langchain-ollama
+langchain-core
+pydantic
+python-dotenv
+requests
+psutil
+nvidia-ml-py
