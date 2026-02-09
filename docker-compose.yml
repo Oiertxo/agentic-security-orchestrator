@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: docker/Orchestrator.dockerfile
     container_name: orchestrator_container
+    ports:
+      - "8000:8000"
     volumes:
       - .:/app
     environment:
