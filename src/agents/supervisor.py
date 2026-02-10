@@ -11,14 +11,15 @@ def supervisor_node(state: AgentState):
     
     supervisor_prompt_template = ChatPromptTemplate.from_messages([
         ("system", SUPERVISOR_INSTRUCTIONS),
-        MessagesPlaceholder(variable_name="messages"),
+        MessagesPlaceholder("messages"),
     ])
     
     structured_llm = llm.bind(format="json")
     chain = supervisor_prompt_template | structured_llm
+    print("Supervisor debug initial request: ", state["messages"])
     response = chain.invoke({"messages": state["messages"]})
     content = response.content
-    print(content)
+    print("Supervisor debug: ", content)
     if not isinstance(content, str):
         content = str(content)
     

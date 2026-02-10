@@ -1,13 +1,15 @@
 from langgraph.graph import StateGraph, END
 from src.state import AgentState
 from src.agents.supervisor import supervisor_node
-from src.agents.worker import mock_worker_node
+from src.agents.recon_worker import recon_worker_node
+from src.agents.exploit_worker import exploit_worker_node
 
 def compile_workflow():
     workflow = StateGraph(AgentState)
     
     workflow.add_node("supervisor", supervisor_node)
-    workflow.add_node("worker", mock_worker_node)
+    workflow.add_node("recon", recon_worker_node)
+    workflow.add_node("exploit", exploit_worker_node)
     
     workflow.set_entry_point("supervisor")
     
@@ -15,11 +17,13 @@ def compile_workflow():
         "supervisor",
         lambda x: x["next_step"],
         {
-            "worker": "worker",
+            "recon": "recon",
+            "exploit": "exploit",
             "FINISH": END
         }
     )
     
-    workflow.add_edge("worker", "supervisor")
+    workflow.add_edge("recon", "supervisor")
+    workflow.add_edge("exploit", "supervisor")
     
     return workflow.compile()
