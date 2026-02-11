@@ -3,32 +3,27 @@ from src.state import AgentState
 from src.model import get_model
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from src.utils import load_prompt
-import json
+from src.utils import parse_as_json, get_clean_content
+from src.logger import logger
 
-def supervisor_node(state: AgentState):
+def supervisor_node(state: AgentState) -> AgentState:
     llm = get_model()
     SUPERVISOR_INSTRUCTIONS = load_prompt("supervisor.txt")
     
-    supervisor_prompt_template = ChatPromptTemplate.from_messages([
+    prompt_template = ChatPromptTemplate.from_messages([
         ("system", SUPERVISOR_INSTRUCTIONS),
-        MessagesPlaceholder("messages"),
+        MessagesPlaceholder(variable_name="messages"),
     ])
+
+    clean_messages = get_clean_content(state["messages"][-6:])
+    logger.info(f"[SUPERVISOR] Invoking Worker Planner. History length: {len(clean_messages)}")    
+    chain = prompt_template | llm.bind(format="json")
     
-    structured_llm = llm.bind(format="json")
-    chain = supervisor_prompt_template | structured_llm
-    print("Supervisor debug initial request: ", state["messages"])
-    response = chain.invoke({"messages": state["messages"]})
-    content = response.content
-    print("Supervisor debug: ", content)
-    if not isinstance(content, str):
-        content = str(content)
-    
-    try:
-        data = json.loads(content)
-    except json.JSONDecodeError:
-        data = {"next_step": "FINISH", "message": "Error: Invalid JSON from Supervisor."}
+    response = chain.invoke({"messages": clean_messages})
+    data = parse_as_json(response.content)
+    logger.info(f"[SUPERVISOR] Worker Planner response: {data}")
 
     return AgentState(
-        messages=[AIMessage(content=data.get("message", ""))],
+        messages=[AIMessage(content=data.get("message", "Supervisor finished"))],
         next_step=data.get("next_step", "FINISH")
     )

@@ -2,12 +2,13 @@ services:
   orchestrator:
     build:
       context: .
-      dockerfile: docker/Orchestrator.dockerfile
+      dockerfile: services/orchestrator/Dockerfile
     container_name: orchestrator_container
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
+      - ./src:/app/src
+      - ./data/logs:/data/logs
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - MODEL_NAME=hermes3
@@ -23,14 +24,15 @@ services:
     networks:
       - internal_network
 
-  # kali-tools:
-  #   build:
-  #     context: .
-  #     dockerfile: docker/Kali.dockerfile
-  #   container_name: kali-tools-container
-  #   networks:
-  #     - internal_network
-  #   tty: true
+  kali-engine:
+    build:
+      context: .
+      dockerfile: services/recon-engine/Dockerfile
+    container_name: kali-tools-container
+    ports:
+      - "5000:5000"
+    networks:
+      - internal_network
 
 networks:
   internal_network:

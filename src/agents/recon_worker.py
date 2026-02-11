@@ -1,18 +1,19 @@
 from langchain_core.messages import AIMessage
 from src.state import AgentState
+from src.subgraphs.recon.subgraph import recon_subgraph
 
 def recon_worker_node(state: AgentState):
-    print("--- MOCK RECON ---")
-
-    technical_output = """
-        [SOURCE: RECON]
-        TARGET_RANGE: 192.168.1.0/24
-        FINDINGS: 
-        - Port 22 (SSH) on 192.168.1.13: OPEN WITHOUT PASSWORD
-        [/END_REPORT]
-        """
-    
-    return AgentState(
-        messages=[AIMessage(content=technical_output)],
-        next_step="supervisor"
-    )
+    out = recon_subgraph.invoke({
+        "messages": state["messages"],
+        "results": [],
+        "step_count": 0,
+        "done": False
+    })
+    summary = {
+        "steps": out.get("step_count", 0),
+        "results": out.get("results", ["Recon not available"])
+    }
+    return {
+        "messages": [AIMessage(content=f"[SOURCE: RECON]\n{summary}")],
+        "next_step": "supervisor"
+    }

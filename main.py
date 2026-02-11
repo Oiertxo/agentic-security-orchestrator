@@ -6,11 +6,12 @@ from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
 from src.graph import compile_workflow
 from src.state import AgentState
+from src.logger import logger
 
 load_dotenv()
 
 def check_deployment():
-    print("--- INITIALIZING DEPLOYMENT ---")
+    logger.info("--- INITIALIZING DEPLOYMENT ---")
     status = True
 
     # Check GPU
@@ -21,26 +22,26 @@ def check_deployment():
     try:
         response = requests.get(f"{ollama_url}/api/tags", timeout=5)
         if response.status_code == 200:
-            print(f"OLLAMA: Service active on {ollama_url}.")
+            logger.info(f"OLLAMA: Service active on {ollama_url}.")
         else:
-            print(f"OLLAMA: Service answers but with error {response.status_code}.")
+            logger.warning(f"OLLAMA: Service answers but with error {response.status_code}.")
     except Exception as e:
-        print(f"OLLAMA: Unreachable. Check if Ollama is running.")
+        logger.error(f"OLLAMA: Unreachable. Check if Ollama is running.")
         status = False
 
     # Check environment
     try:
         import langgraph
-        print(f"ENVIRONMENT: LangGraph and dependencies correctly installed.")
+        logger.info(f"ENVIRONMENT: LangGraph and dependencies correctly installed.")
     except ImportError:
-        print("ENVIRONMENT: Libraries missing. Check venv.")
+        logger.error("ENVIRONMENT: Libraries missing. Check venv.")
         status = False
 
-    print("-------------------------------")
+    logger.info("-------------------------------")
     if status:
-        print("DEPLOYED SUCCESSFULLY")
+        logger.info("DEPLOYED SUCCESSFULLY")
     else:
-        print("ERROR WHILE DEPLOYING")
+        logger.error("ERROR WHILE DEPLOYING")
     
     return status
 
@@ -52,12 +53,12 @@ def check_gpu():
         info = pynvml.nvmlDeviceGetMemoryInfo(handle)
         name = pynvml.nvmlDeviceGetName(handle)
         
-        print(f"GPU: {name}")
-        print(f"VRAM: {int(info.total) / 1024**2:.0f} MB")
+        logger.info(f"GPU: {name}")
+        logger.info(f"VRAM: {int(info.total) / 1024**2:.0f} MB")
         pynvml.nvmlShutdown()
         return True
     except Exception as e:
-        print(f"GPU not detected: {e}")
+        logger.error(f"GPU not detected: {e}")
         return False
     
 app = FastAPI(
@@ -70,7 +71,7 @@ app = FastAPI(
 try:
     security_graph = compile_workflow()
 except Exception as e:
-    print(f"CRITICAL: Failed to compile graph: {e}")
+    logger.error(f"CRITICAL: Failed to compile graph: {e}")
     sys.exit(1)
 
 # Define user request
@@ -95,7 +96,7 @@ async def chat_endpoint(request: UserRequest):
         
         final_message = result["messages"][-1].content
         
-        print(f"Sending response: {final_message[:50]}...")
+        logger.info(f"[MAIN] Sending response: {final_message}")
         return {
             "response": final_message,
             "history": history,
@@ -103,11 +104,11 @@ async def chat_endpoint(request: UserRequest):
         }
 
     except Exception as e:
-        print(f"Error executing graph: {e}")
+        logger.error(f"Error executing graph: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     if not check_deployment():
         sys.exit(1)
-    print("Starting Server on port 8000...")
+    logger.info("Starting Server on port 8000...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
