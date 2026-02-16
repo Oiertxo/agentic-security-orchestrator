@@ -4,7 +4,7 @@ from .planner_node import recon_planner_node
 from .executor_node import recon_executor_node
 from src.logger import logger
 
-MAX_STEPS = 8
+MAX_STEPS = 20
 
 def build_recon_subgraph():
     graph = StateGraph(ReconState)
@@ -16,7 +16,7 @@ def build_recon_subgraph():
 
     def route_from_planner(state: ReconState):
         step = int(state.get("step_count", 0))
-        logger.info(f"[RECON_SUBGRAPH] State after planner: {state}")
+        
         if state.get("done") or step >= MAX_STEPS:
             return "finish"
         return "executor"

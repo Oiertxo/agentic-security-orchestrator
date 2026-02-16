@@ -1,14 +1,21 @@
 from langchain_core.messages import AIMessage
 from src.state import AgentState
 from src.subgraphs.recon.subgraph import recon_subgraph
+from src.subgraphs.recon.state import ReconState
 
 def recon_worker_node(state: AgentState):
-    out = recon_subgraph.invoke({
+    initial_recon_state: ReconState = {
         "messages": state["messages"],
         "results": [],
+        "port_map": {},
+        "scanned_hosts": [],
+        "pending_hosts": [],
+        "done": False,
         "step_count": 0,
-        "done": False
-    })
+    }
+
+    out = recon_subgraph.invoke(initial_recon_state)
+
     summary = {
         "steps": out.get("step_count", 0),
         "results": out.get("results", ["Recon not available"])

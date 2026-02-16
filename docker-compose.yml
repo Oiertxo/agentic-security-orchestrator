@@ -12,28 +12,44 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - MODEL_NAME=hermes3
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    cap_drop:
+      - NET_RAW
     networks:
-      - internal_network
+      - mgmt_net
 
   kali-engine:
     build:
       context: .
       dockerfile: services/recon-engine/Dockerfile
     container_name: kali-tools-container
-    ports:
-      - "5000:5000"
+    cap_add:
+      - NET_RAW
     networks:
-      - internal_network
+      mgmt_net:
+      attack_net:
+        ipv4_address: 10.255.255.2
+
+  vuln-target:
+    build:
+      context: .
+      dockerfile: services/targets/Dockerfile
+    container_name: vuln-target
+    expose:
+      - "22"
+    networks:
+      attack_net:
+        ipv4_address: 10.255.255.10
 
 networks:
-  internal_network:
+  mgmt_net:
     driver: bridge
+
+  attack_net:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.255.255.0/24
+          gateway: 10.255.255.1

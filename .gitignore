@@ -89,3 +89,6 @@ venv.bak/
 
 # PyPI configuration file
 .pypirc
+
+# Custom
+/data

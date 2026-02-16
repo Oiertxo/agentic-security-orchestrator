@@ -70,7 +70,7 @@ def call_recon_engine(
     
     payload = _normalize_payload(tool=tool, args=args, plan=plan)
     base = base_url or _get_base_url()
-    url = f"{base.rstrip('/')}/run_mock"
+    url = f"{base.rstrip('/')}/run"
 
     attempt = 0
     last_exc: Optional[Exception] = None
@@ -81,7 +81,7 @@ def call_recon_engine(
                 resp = client.post(url, json=payload, headers={"Content-Type": "application/json"})
             try:
                 data = resp.json()
-                logger.info(f"[EXECUTOR_CLIENT] Response: {resp}")
+                logger.info(f"[EXECUTOR_CLIENT] Response: {data["tool"], data["target"], data["options"]}")
             except Exception:
                 data = None
 

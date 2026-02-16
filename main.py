@@ -14,9 +14,6 @@ def check_deployment():
     logger.info("--- INITIALIZING DEPLOYMENT ---")
     status = True
 
-    # Check GPU
-    status = check_gpu()
-
     # Check Ollama
     ollama_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     try:
@@ -45,22 +42,6 @@ def check_deployment():
     
     return status
 
-def check_gpu():
-    try:
-        import pynvml
-        pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-        info = pynvml.nvmlDeviceGetMemoryInfo(handle)
-        name = pynvml.nvmlDeviceGetName(handle)
-        
-        logger.info(f"GPU: {name}")
-        logger.info(f"VRAM: {int(info.total) / 1024**2:.0f} MB")
-        pynvml.nvmlShutdown()
-        return True
-    except Exception as e:
-        logger.error(f"GPU not detected: {e}")
-        return False
-    
 app = FastAPI(
     title="Agentic Security Orchestrator",
     description="API for the LangGraph Security Agent System",
