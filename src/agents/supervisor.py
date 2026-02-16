@@ -3,8 +3,10 @@ from src.state import AgentState
 from src.model import get_model
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from src.utils import load_prompt
-from src.utils import parse_as_json, get_clean_content, last_ai_planner_message, last_recon_summary, last_user_message
+from src.utils import get_clean_content
+from src.schemas import SupervisorSchema
 from src.logger import logger
+from typing import Dict, Any
 
 def supervisor_node(state: AgentState) -> AgentState:
     llm = get_model()
@@ -17,13 +19,16 @@ def supervisor_node(state: AgentState) -> AgentState:
         MessagesPlaceholder(variable_name="messages"),
     ])
     logger.info(f"[SUPERVISOR] Invoking Worker Planner. Messages: {clean_messages}")    
-    chain = prompt_template | llm.bind(format="json")
     
-    response = chain.invoke({"messages": clean_messages})
-    data = parse_as_json(response.content)
-    logger.info(f"[SUPERVISOR] Worker Planner response: {data}")
+    chain = (prompt_template | llm.with_structured_output(SupervisorSchema)).with_types(
+        input_type=Dict[str, Any],
+        output_type=SupervisorSchema,
+    )
+    response = SupervisorSchema.model_validate(chain.invoke({"messages": clean_messages}))
+
+    logger.info(f"[SUPERVISOR] Worker Planner response: {response}")
 
     return AgentState(
-        messages=[AIMessage(content=data.get("message", "Supervisor finished"))],
-        next_step=data.get("next_step", "FINISH")
+        messages=[AIMessage(content=response.message)],
+        next_step=response.next_step
     )

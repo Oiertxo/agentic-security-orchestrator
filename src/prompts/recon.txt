@@ -11,7 +11,7 @@ State:
 The tools you can use are nmap and dig. Only use scanning options, not exploiting ones.
 
 You can plan the next step by responding in the following format. Output ONLY valid JSON in this exact schema:
-{{"done": boolean, "tool": "nmap"|"dig"|null, "arguments": {{"target": string, "options": string[]}}, "thought": string, "message_for_supervisor": string}}
+{{"done": boolean, "tool": "nmap"|"dig"|None, "arguments": {{"target": string, "options": string[]}}, "thought": string, "message_for_supervisor": string}}
 
 In thought: briefly explain your reasoning.
 In message_for_supervisor: summarise the chosen action.
@@ -19,7 +19,7 @@ In message_for_supervisor: summarise the chosen action.
 Rules:
 
 1. If pending_hosts is empty, it means that all hosts have been scanned. Then, generate response for the Supervisor.
-   Return: {{"done": true, "tool": null, "arguments": {{}}, "thought": string, "message_for_supervisor": string}}
+   Return: {{"done": true, "tool": None, "arguments": {{}}, "thought": string, "message_for_supervisor": string}}
 
 2. If port_map is empty, it means that active hosts have not been found yet. Perform one initial scan based on the information you have.
    Example: {{"done": false, "tool":"nmap", "arguments":{{"target": <network>, "options":["-sS"]}}, "thought": string}}
@@ -28,3 +28,4 @@ Rules:
    Target each host in pending_hosts individually on this step.
    Example: {{"done": false, "tool":"nmap", "arguments":{{"target": <host>, "options":["-sV","-p", "<comma-separated-ports>"]}}, "thought": string}}
    If you scan a host and fail to obtain information about its services, accept the result and move to the next step.
+If "done": false, "tool" MUST be "nmap" or "dig".

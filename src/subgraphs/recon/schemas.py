@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel
 
 class PlannerArguments(BaseModel):
@@ -7,7 +7,7 @@ class PlannerArguments(BaseModel):
 
 class PlannerSchema(BaseModel):
     done: bool
-    tool: Optional[str] = None
+    tool: Literal["nmap", "dig", None]
     arguments: PlannerArguments
     thought: str
     message_for_supervisor: str

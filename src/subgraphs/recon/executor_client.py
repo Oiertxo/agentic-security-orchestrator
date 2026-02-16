@@ -6,7 +6,6 @@ import os, time, httpx
 def _get_base_url() -> str:
     return os.getenv("RECON_ENGINE_URL", "http://kali-engine:5000")
 
-
 def _normalize_payload(
     tool: Optional[str] = None,
     args: Optional[Dict[str, Any]] = None,
@@ -39,7 +38,7 @@ def _normalize_payload(
         target = arguments.get("target")
         options = arguments.get("options", [])
 
-    if not tool:
+    if not tool or tool is None:
         raise ValueError("Missing 'tool' in recon plan.")
     if not target:
         raise ValueError("Missing 'target' in recon plan arguments.")
@@ -55,7 +54,6 @@ def _normalize_payload(
         "target": target,
         "options": options,
     }
-
 
 def call_recon_engine(
     *,
