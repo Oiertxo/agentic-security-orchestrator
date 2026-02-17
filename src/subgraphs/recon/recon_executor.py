@@ -1,5 +1,5 @@
 from langchain_core.messages import HumanMessage
-from src.subgraphs.recon.state import ReconState, derive_pending_hosts, merge_port_map, target_is_network, was_version_scan
+from src.subgraphs.recon.recon_state import ReconState, derive_pending_hosts, merge_port_map, target_is_network, was_version_scan
 from src.subgraphs.recon.recon_executor_client import call_recon_engine
 from src.utils import parse_as_json
 from src.logger import logger
