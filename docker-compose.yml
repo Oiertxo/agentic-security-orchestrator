@@ -26,6 +26,9 @@ services:
     container_name: kali-tools-container
     cap_add:
       - NET_RAW
+      - NET_ADMIN
+    entrypoint: ["/usr/local/bin/entrypoint.sh"]
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
     networks:
       mgmt_net:
       attack_net:
@@ -45,6 +48,10 @@ services:
 networks:
   mgmt_net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.255.254.0/24
+          gateway: 10.255.254.1
 
   attack_net:
     driver: bridge

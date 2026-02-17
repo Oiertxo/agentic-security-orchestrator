@@ -43,8 +43,25 @@ def run(req: ReconRequest):
     ensure_lab_target(req.target)
 
     if req.tool == "nmap":
-        ensure_nmap_options(req.options)
-        cmd = ["nmap"] + req.options + ["-n", "-Pn", "--max-retries", "1", "--host-timeout", "30s", "-T4", "-oX", "-", req.target]
+        ensure_nmap_options(req.options)        
+        try:
+            with open("/etc/nmap-exclude", "r") as f:
+                exclude_ips = f.read().strip()
+        except Exception:
+            exclude_ips = ""
+        cmd = [
+            "nmap",
+            *req.options,
+            "-n",
+            "-Pn",
+            "--max-retries", "1",
+            "--host-timeout", "30s",
+            "-T4",
+            "-oX", "-",
+            "--exclude",
+            exclude_ips,
+            req.target,
+        ]
     elif req.tool == "dig":
         cmd = ["dig", req.target, "ANY"]
     else:

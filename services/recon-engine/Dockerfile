@@ -1,8 +1,12 @@
 FROM python:3.12-slim
 
 RUN apt update && apt install -y \
+    iproute2 \
+    iptables \
+    iputils-ping \
     ca-certificates \
-    nmap dnsutils \
+    nmap \
+    dnsutils \
     && update-ca-certificates \
     && apt clean
 
@@ -16,5 +20,7 @@ RUN pip install --no-cache-dir \
 COPY services/recon-engine/app /opt/recon/app
 WORKDIR /opt/recon/app
 
+COPY services/recon-engine/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 EXPOSE 5000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
