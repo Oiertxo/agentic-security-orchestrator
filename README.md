@@ -171,7 +171,7 @@ All behind opt‑in environment flags.
 docker compose up --build
 ```
 
-Send a JSON to http://localhost:8000/chat with the request. Example with the current target:
+Now, send a Post type HTTP request with a JSON to http://localhost:8000/chat with the request. Example with the current target:
 
     {"query": "Please scan the network 10.255.255.0/24 for vulnerabilities"}
 
