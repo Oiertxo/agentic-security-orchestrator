@@ -11,7 +11,17 @@ State:
 The tools you can use are nmap and dig. Only use scanning options, not exploiting ones.
 
 You can plan the next step by responding in the following format. Output ONLY valid JSON in this exact schema:
-{{"done": boolean, "tool": "nmap"|"dig"|None, "arguments": {{"target": string, "options": string[]}}, "thought": string, "message_for_supervisor": string}}
+{{
+  "done": true | false,
+  "tool": "nmap" | "dig" | null,
+  "arguments": {{
+       "target": "string or null",
+       "options": ["list", "of", "strings"]
+  }},
+  "thought": "string explaining your reasoning",
+  "message_for_supervisor": "instructional message for supervisor"
+}}
+
 
 In thought: briefly explain your reasoning.
 In message_for_supervisor: summarise the chosen action.

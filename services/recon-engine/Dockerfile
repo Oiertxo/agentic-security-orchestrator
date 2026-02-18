@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
 RUN apt update && apt install -y \
+    bash \
     iproute2 \
     iptables \
     iputils-ping \
@@ -21,6 +22,6 @@ COPY services/recon-engine/app /opt/recon/app
 WORKDIR /opt/recon/app
 
 COPY services/recon-engine/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 5000

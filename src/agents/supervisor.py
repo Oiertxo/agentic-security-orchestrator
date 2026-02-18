@@ -10,25 +10,35 @@ from typing import Dict, Any
 
 def supervisor_node(state: AgentState) -> AgentState:
     llm = get_model()
-    SUPERVISOR_INSTRUCTIONS = load_prompt("supervisor.txt")
+    system_prompt = load_prompt("supervisor.txt")
 
-    clean_messages = get_clean_content(state["messages"])
-    
-    prompt_template = ChatPromptTemplate.from_messages([
-        ("system", SUPERVISOR_INSTRUCTIONS),
-        MessagesPlaceholder(variable_name="messages"),
+    recon_ns = state.get("recon", {}) or {}
+    exploit_ns = state.get("exploit", {}) or {}
+
+    supervisor_input = {
+        "messages": get_clean_content(state["messages"])
+    }
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        MessagesPlaceholder("messages")
     ])
-    logger.info(f"[SUPERVISOR] Invoking Worker Planner. Messages: {clean_messages}")    
+
+    logger.info(f"[SUPERVISOR] Invoking Worker Planner. Input: {supervisor_input}")
     
-    chain = (prompt_template | llm.with_structured_output(SupervisorSchema)).with_types(
+    chain = (
+        prompt
+        | llm.with_structured_output(SupervisorSchema, method="json_mode", strict=True)
+    ).with_types(
         input_type=Dict[str, Any],
         output_type=SupervisorSchema,
     )
-    response = SupervisorSchema.model_validate(chain.invoke({"messages": clean_messages}))
+
+    response: SupervisorSchema = SupervisorSchema.model_validate(chain.invoke(supervisor_input))
 
     logger.info(f"[SUPERVISOR] Worker Planner response: {response}")
 
-    return AgentState(
-        messages=[AIMessage(content=response.message)],
-        next_step=response.next_step
-    )
+    return {
+        "messages": [AIMessage(content=response.message)],
+        "next_step": response.next_step
+    }

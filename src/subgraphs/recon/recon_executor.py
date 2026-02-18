@@ -1,14 +1,14 @@
 from langchain_core.messages import HumanMessage
-from src.subgraphs.recon.recon_state import ReconState, derive_pending_hosts, merge_port_map, target_is_network, was_version_scan
+from src.state import AgentState
 from src.subgraphs.recon.recon_executor_client import call_recon_engine
-from src.utils import parse_as_json
+from src.utils import parse_as_json, derive_pending_hosts, merge_port_map, target_is_network, was_version_scan
 from src.logger import logger
 from xml.etree import ElementTree
 from typing import Dict, List, Any
 import json
 
-def recon_executor_node(state: ReconState):
-    step = int(state.get("step_count", 0)) + 1
+def recon_executor_node(state: AgentState):
+    new_step = int((state.get("recon", {}) or {}).get("step_count", 0)) + 1
 
     raw = state["messages"][-1].content
     logger.info(f"[RECON_EXECUTOR_NODE] plan: {parse_as_json(raw)}")
@@ -16,16 +16,20 @@ def recon_executor_node(state: ReconState):
         plan = parse_as_json(raw)
     except Exception:
         result = {"ok": False, "error": "planner_output_not_json", "raw": raw}
-        return {
+        recon_state: AgentState = {
             "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(result)}")],
-            "results": [result],
-            "step_count": step,
-            "port_map": state.get("port_map") or {},
-            "scanned_hosts": state.get("scanned_hosts") or [],
-            "pending_hosts": state.get("pending_hosts") or [],
-            "done": False,
+            "recon": {
+                "results": [result],
+                "step_count": new_step,
+                "port_map": state.get("port_map") or {},
+                "scanned_hosts": state.get("scanned_hosts") or [],
+                "pending_hosts": state.get("pending_hosts") or [],
+                "done": False,
+            },
+            "exploit": {},            
+            "next_step": ""
         }
-
+        return recon_state
 
     engine_result = call_recon_engine(plan=plan)
 
@@ -61,15 +65,20 @@ def recon_executor_node(state: ReconState):
 
     new_pending = derive_pending_hosts(new_port_map, new_scanned)
     logger.info(f"[RECON_EXECUTOR] Recon engine result: {summary}")
-
-    return {
-        "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(summary)}")],
-        "results": [summary],
-        "step_count": step,
+    old_recon = state.get("recon", {})
+    updated_recon = {
+        **old_recon,
+        "results": (old_recon.get("results") or []) + [summary],
+        "step_count": new_step,
+        "done": False,
         "port_map": new_port_map,
         "scanned_hosts": new_scanned,
         "pending_hosts": new_pending,
-        "done": False,
+    }
+
+    return {
+        "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(summary)}")],
+        "recon": updated_recon,
     }
 
 def summarize_nmap_xml(xml_str: str) -> Dict[str, Any]:

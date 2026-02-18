@@ -67,7 +67,9 @@ async def chat_endpoint(request: UserRequest):
 
     initial_state: AgentState = {
         "messages": [HumanMessage(content=request.query)],
-        "next_step": "supervisor"
+        "next_step": "supervisor",
+        "recon": {},
+        "exploit": {},
     }
 
     try:

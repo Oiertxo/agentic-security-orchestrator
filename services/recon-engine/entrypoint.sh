@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 set -e
 
 SELF_IP=$(hostname -I | tr ' ' '\n' | grep '^10\.255\.' | grep -v '^10\.255\.254\.' | head -n1)

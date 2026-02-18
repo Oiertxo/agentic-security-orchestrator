@@ -1,6 +1,6 @@
 import os, json, re
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
-from typing import Any
+from typing import List, Dict, Any
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
 
@@ -127,3 +127,50 @@ def last_ai_planner_message(messages: list[BaseMessage]) -> AIMessage | None:
         if isinstance(m, AIMessage):
             return m
     return None
+
+def merge_port_map(port_map: Dict[str, List[int]], summary: Dict[str, Any]) -> Dict[str, List[int]]:
+    """
+    Merge the newest scan summary into the existing port_map.
+    Summary is shaped like:
+      {
+        "summary": {"hosts_found":..., ...},
+        "hosts": [{"ip":"10.0.0.1","open_ports":[22,80]}, ...]
+      }
+    """
+    new_map = dict(port_map or {})
+    hosts = summary.get("hosts") or []
+    for h in hosts:
+        ip = h.get("ip")
+        ports = h.get("open_ports") or []
+        if not ip:
+            continue
+        # Merge unique, sorted
+        merged = sorted(set((new_map.get(ip) or []) + ports))
+        new_map[ip] = merged
+    return new_map
+
+
+def derive_pending_hosts(
+    port_map: Dict[str, List[int]],
+    scanned_hosts: List[str]
+) -> List[str]:
+    pending = []
+    for ip, ports in (port_map or {}).items():
+        if ports and ip not in (scanned_hosts or []):
+            pending.append(ip)
+    return sorted(pending)
+
+
+def was_version_scan(plan: Dict[str, Any]) -> bool:
+    opts = (plan.get("arguments") or {}).get("options") or []
+    norm = [(opt or "").strip().lower() for opt in opts]
+    return any(
+        o == "-sv"
+        or o.startswith("-sv")
+        or o == "-a"
+        or o == "--version-all"
+    for o in norm
+    )
+
+def target_is_network(target: str) -> bool:
+    return "/" in (target or "")

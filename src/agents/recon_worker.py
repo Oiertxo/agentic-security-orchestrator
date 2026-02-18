@@ -1,26 +1,24 @@
 from langchain_core.messages import AIMessage
 from src.state import AgentState
 from src.subgraphs.recon.recon_subgraph import recon_subgraph
-from src.subgraphs.recon.recon_state import ReconState
+from src.logger import logger
 
-def recon_worker_node(state: AgentState):
-    initial_recon_state: ReconState = {
-        "messages": state["messages"],
-        "results": [],
-        "port_map": {},
-        "scanned_hosts": [],
-        "pending_hosts": [],
-        "done": False,
-        "step_count": 0,
-    }
-
-    out = recon_subgraph.invoke(initial_recon_state)
-
+def recon_worker_node(state: AgentState) -> AgentState:
+    out = recon_subgraph.invoke(state)
+    logger.info(f"[RECON_WORKER_NODE] Output: {out}")
+    
+    recon_out = out.get("recon") or {}
     summary = {
-        "steps": out.get("step_count", 0),
-        "results": out.get("results", ["Recon not available"])
+        "steps": recon_out.get("step_count", 0),
+        "results": recon_out.get("results", ["Recon not available"]),
     }
+
     return {
         "messages": [AIMessage(content=f"[SOURCE: RECON]\n{summary}")],
-        "next_step": "supervisor"
+        "next_step": "supervisor",
+        "recon": {
+            "port_map": (out.get("recon") or {}).get("port_map") or {},
+            "results": (out.get("recon") or {}).get("results") or [],
+            "scanned_hosts": (out.get("recon") or {}).get("scanned_hosts") or []
+        }
     }
