@@ -23,7 +23,71 @@ The system uses **LangGraph subgraphs** to coordinate separate reasoning loops f
 
 A central **Supervisor Agent** coordinates the workflow:
 
-    User → Supervisor → Recon Subgraph → Optional Exploit Subgraph → Summary → User
+    User → Supervisor → Recon Subgraph → Supervisor → Exploit Subgraph → Supervisor (Summary) → User
+
+### Graphic representation
+
+graph TD
+    classDef ai fill:#f9f,stroke:#333,stroke-width:2px,color:#000;
+    classDef container fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
+    classDef external fill:#fff3e0,stroke:#e65100,stroke-width:2px,stroke-dasharray: 5 5,color:#000;
+    classDef state fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000;
+
+    User(["👤 User Input"]) --> Supervisor
+
+    subgraph "🛡️ LangGraph Orchestrator"
+        Supervisor[("🧠 Supervisor")]:::state
+        
+        subgraph "Reconnaissance Subgraph"
+            ReconPlanner["Recon Planner"]
+            ReconExec["Recon Executor"]
+        end
+        
+        subgraph "Exploitation Subgraph"
+            ExploitPlanner["Exploit Planner"]
+            ExploitExec["Exploit Executor"]
+        end
+
+        Supervisor --"Next step: Recon"--> ReconPlanner
+        Supervisor --"Next step: Exploit"--> ExploitPlanner
+
+        ReconPlanner --"Recon findings"--> Supervisor
+        ExploitPlanner --"Exploit findings"--> Supervisor
+        
+        ReconPlanner --"Plan action"--> ReconExec
+        ExploitPlanner --"Plan action"--> ExploitExec
+        
+        ReconExec --"Results & State Update"--> ReconPlanner
+        ExploitExec --"Results & State Update"--> ExploitPlanner
+    end
+
+    subgraph "🤖 Local AI Inference Engine"
+        Ollama[("🦙 Ollama Server")]:::ai
+    end
+
+    Supervisor <.-> Ollama
+    ReconPlanner <.-> Ollama
+    ExploitPlanner <.-> Ollama
+
+    subgraph "🐉 Kali Linux Tools Container"
+        KaliAPI["FastAPI Engine"]:::container
+        Nmap[("Nmap")]
+        NVDSearch["NVD Search Script"]
+        Logs[("📂 Persistent Logs")]
+    end
+
+    ReconExec --"POST /recon"--> KaliAPI
+    ExploitExec --"POST /cve_lookup"--> KaliAPI
+
+    KaliAPI --> Nmap
+    KaliAPI --> NVDSearch
+    KaliAPI --> Logs
+
+    Target["🎯 Target Network (10.255.255.0/24)"]:::external
+    NVD_API(("☁️ NIST NVD API")):::external
+
+    Nmap --"SYN/Version Scan"--> Target
+    NVDSearch --"HTTPS Query (CVSS)"--> NVD_API
 
 ***
 
@@ -47,7 +111,7 @@ A hardened container that:
 *   Applies **dynamic egress firewalling** to ensure:
     *   Only target hosts are reachable
     *   Gateway and self are blocked
-*   Receives tool execution requests via REST (`/run`)
+*   Receives tool execution requests via REST (`/run`) (Soon)
 
 ### **3. Vulnerable Targets**
 
@@ -66,22 +130,22 @@ Isolated inside `attack_net`:
     *   Handles full cycle:
         *   CIDR → host discovery → port map → version scans → summary
 
-*   **Exploit Subgraph (coming next)**
+*   **Exploit Subgraph (actively working)**
     *   Will mirror Recon’s architecture
     *   Planner selects exploit vectors
     *   Executor performs safe actions
-    *   Produces structured findings (ExploitFinding)
+    *   Produces structured findings
 
 ***
 
 ## 🔍 Recon Capabilities
 
-✔ Full network scan (`-sS` with safe defaults)  
-✔ Automatic exclusion of gateway & self  
-✔ Structured parsing of Nmap XML into JSON  
-✔ Planner-driven version scanning  
-✔ Full reasoning loop until no pending hosts  
-✔ Supervisor integration  
+✔ Full network scan
+✔ Automatic exclusion of gateway & self
+✔ Structured parsing of Nmap XML into JSON
+✔ Planner-driven version scanning
+✔ Full reasoning loop until no pending hosts
+✔ Supervisor integration
 ✔ Clean recon summary output to user
 
 Example output:
@@ -97,11 +161,11 @@ This is the immediate roadmap.
 
 ### **Phase 1 — Safe Exploit Subgraph**
 
-*   `exploit_planner` using structured LangGraph schema
+✔   `exploit_planner` using structured LangGraph schema
 *   `exploit_executor` with sandbox-safe vectors:
-    *   SSH banner probe
+    ✔   SSH banner probe
     *   HTTP header probe
-    *   CVE identification (no payload execution)
+    ✔   CVE identification (no payload execution)
     *   “Would‑exploit” simulation mode
 
 ### **Phase 2 — Controlled Lab Exploits**
@@ -149,13 +213,16 @@ All behind opt‑in environment flags.
 *   LangGraph integration
 *   Supervisor loop implementation
 *   Host mapping and version scanning
-
-### 🚧 In Progress
-
 *   Designing exploit planner schema
 *   Designing exploit executor
 
-### 🔜 Coming Soon
+### 🚧 In Progress
+
+*   Final Summary Node to generate report of findings
+*   Exploit search by Exploit Subgraph
+*   More thorough testing on various targets
+
+### 🔜 Future plans
 
 *   Multi-vector exploit reasoning
 *   Safe-mode vs aggressive-mode flags
