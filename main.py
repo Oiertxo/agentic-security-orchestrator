@@ -1,4 +1,3 @@
-# main.py
 import os, sys, requests, uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -7,6 +6,7 @@ from langchain_core.messages import HumanMessage
 from src.graph import compile_workflow
 from src.state import AgentState
 from src.logger import logger
+from langfuse.langchain import CallbackHandler
 
 load_dotenv()
 
@@ -48,6 +48,8 @@ app = FastAPI(
     version="0.1.0"
 )
 
+langfuse_handler = CallbackHandler()
+
 # Compile the Graph once at startup
 try:
     security_graph = compile_workflow()
@@ -66,6 +68,7 @@ async def chat_endpoint(request: UserRequest):
     print(f"Received query: {request.query}")
 
     initial_state: AgentState = {
+        "user_target": "",
         "messages": [HumanMessage(content=request.query)],
         "next_step": "supervisor",
         "recon": {},
@@ -73,7 +76,7 @@ async def chat_endpoint(request: UserRequest):
     }
 
     try:
-        result = security_graph.invoke(initial_state)
+        result = security_graph.invoke(initial_state, config={"callbacks": [langfuse_handler]})
 
         history = [f"{type(m).__name__}: {m.content[:30]}" for m in result["messages"]]
         

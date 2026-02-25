@@ -7,7 +7,10 @@ load_dotenv()
 llm = ChatOllama(
     model = os.getenv("MODEL_NAME", "hermes3"),
     temperature = 0,
-    base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434")
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
+    num_ctx=4096,
+    num_gpu=-1,
+    repeat_penalty=1.2
 )
 
 def get_model():

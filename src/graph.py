@@ -19,7 +19,7 @@ def compile_workflow():
         {
             "recon": "recon",
             "exploit": "exploit",
-            "FINISH": END
+            "finish": END
         }
     )
     

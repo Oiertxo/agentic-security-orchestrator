@@ -1,30 +1,30 @@
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from src.state import AgentState
 from src.model import get_model
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from src.utils import load_prompt
-from src.utils import get_clean_content
+from src.utils import load_prompt, get_clean_content, last_n_messages, supervisor_state_view
 from src.schemas import SupervisorSchema
 from src.logger import logger
 from typing import Dict, Any
+from langfuse import observe
+import json
 
+@observe(name="Supervisor node")
 def supervisor_node(state: AgentState) -> AgentState:
     llm = get_model()
     system_prompt = load_prompt("supervisor.txt")
 
-    recon_ns = state.get("recon", {}) or {}
-    exploit_ns = state.get("exploit", {}) or {}
-
     supervisor_input = {
-        "messages": get_clean_content(state["messages"])
+        "state": supervisor_state_view(state)
     }
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),
-        MessagesPlaceholder("messages")
+        ("system", "Current State of execution:\n{state}"),
     ])
 
-    logger.info(f"[SUPERVISOR] Invoking Worker Planner. Input: {supervisor_input}")
+    logger.info(f"[SUPERVISOR] Received state: {state}")
+    logger.info(f"[SUPERVISOR] Invoking Supervisor Planner. Input: {supervisor_input}")
     
     chain = (
         prompt
@@ -36,9 +36,30 @@ def supervisor_node(state: AgentState) -> AgentState:
 
     response: SupervisorSchema = SupervisorSchema.model_validate(chain.invoke(supervisor_input))
 
-    logger.info(f"[SUPERVISOR] Worker Planner response: {response}")
+    logger.info(f"[SUPERVISOR] Supervisor Planner response: {response}")
+    
+    # recon = state.get("recon", {}) or {}
+    # if recon.get("finished") is True and response.next_step == "recon":
+    #     response.next_step = "exploit"
+
+    exploit = state.get("exploit", {}) or {}
+    if exploit.get("finished") is True and response.next_step != "finish":
+        response.next_step = "finish"
 
     return {
-        "messages": [AIMessage(content=response.message)],
+        **state,
+        "user_target": response.user_target,
+        "messages": [state["messages"][0], AIMessage(content=response.message)],
         "next_step": response.next_step
     }
+
+def get_messages_for_supervisor(messages: list) -> list:
+    clean_history = []
+    
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            clean_history.append(msg)
+        elif isinstance(msg, AIMessage):
+            clean_history.append(msg)
+
+    return clean_history

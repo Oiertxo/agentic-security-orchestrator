@@ -1,40 +1,40 @@
 from langchain_core.messages import HumanMessage
-from src.state import AgentState
+from src.state import AgentState, ReconState, PortMap, ServiceMeta
 from src.subgraphs.recon.recon_executor_client import call_recon_engine
 from src.utils import parse_as_json, derive_pending_hosts, merge_port_map, target_is_network, was_version_scan
 from src.logger import logger
 from xml.etree import ElementTree
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
+from langfuse import observe
 import json
 
-def recon_executor_node(state: AgentState):
-    new_step = int((state.get("recon", {}) or {}).get("step_count", 0)) + 1
+@observe(name="Recon executor")
+def recon_executor_node(state: AgentState) -> AgentState:
+    recon_state = state.get("recon", {}) or {}
+    new_step = int(recon_state.get("step_count", 0)) + 1
 
     raw = state["messages"][-1].content
-    logger.info(f"[RECON_EXECUTOR_NODE] plan: {parse_as_json(raw)}")
+    logger.info(f"[RECON_EXECUTOR_NODE] plan: {raw}")
     try:
         plan = parse_as_json(raw)
     except Exception:
         result = {"ok": False, "error": "planner_output_not_json", "raw": raw}
-        recon_state: AgentState = {
-            "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(result)}")],
+        return {
+            **state,
             "recon": {
-                "results": [result],
                 "step_count": new_step,
-                "port_map": state.get("port_map") or {},
-                "scanned_hosts": state.get("scanned_hosts") or [],
-                "pending_hosts": state.get("pending_hosts") or [],
-                "done": False,
+                "port_map": recon_state.get("port_map") or {},
+                "scanned_hosts": recon_state.get("scanned_hosts") or [],
+                "pending_hosts": recon_state.get("pending_hosts") or [],
+                "finished": False,
             },
-            "exploit": {},            
-            "next_step": ""
+            "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(result)}")],
         }
-        return recon_state
 
     engine_result = call_recon_engine(plan=plan)
 
-    new_port_map = state.get("port_map") or {}
-    new_scanned = state.get("scanned_hosts") or []
+    new_port_map = recon_state.get("port_map") or {}
+    new_scanned = recon_state.get("scanned_hosts") or []
 
     if not engine_result.get("ok"):
         summary = {
@@ -54,10 +54,11 @@ def recon_executor_node(state: AgentState):
                 "response": response
             }
         else:
-            summary = summarize_nmap_xml(xml_str)
+            parsed = parse_nmap_xml(xml_str)
+            summary = parsed["summary"]
             
-            new_port_map = merge_port_map(state.get("port_map") or {}, summary)
-            new_scanned = list(state.get("scanned_hosts") or [])
+            new_port_map = merge_port_map(recon_state.get("port_map") or {}, parsed["port_map"])
+            new_scanned = list(recon_state.get("scanned_hosts") or [])
             if was_version_scan(plan):
                 target = (plan.get("arguments") or {}).get("target")
                 if target and not target_is_network(target) and target not in new_scanned:
@@ -65,82 +66,86 @@ def recon_executor_node(state: AgentState):
 
     new_pending = derive_pending_hosts(new_port_map, new_scanned)
     logger.info(f"[RECON_EXECUTOR] Recon engine result: {summary}")
-    old_recon = state.get("recon", {})
-    updated_recon = {
-        **old_recon,
-        "results": (old_recon.get("results") or []) + [summary],
+    updated_recon: ReconState = {
+        **recon_state,
+        "results": (recon_state.get("results") or []) + [summary],
         "step_count": new_step,
-        "done": False,
+        "finished": False,
         "port_map": new_port_map,
         "scanned_hosts": new_scanned,
         "pending_hosts": new_pending,
     }
 
     return {
-        "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(summary)}")],
+        **state,
         "recon": updated_recon,
+        "next_step": "planner"
     }
 
-def summarize_nmap_xml(xml_str: str) -> Dict[str, Any]:
+def parse_nmap_xml(xml_str: str) -> Dict[str, Any]:
     try:
         root = ElementTree.fromstring(xml_str)
     except ElementTree.ParseError:
-        return {"error": "invalid_xml"}
+        return {"ok": False, "error": "invalid_xml"}
 
-    hosts_summary = []
-    scanning_time = 0
-    scan_finished_time = 0
+    runstats = root.find("runstats/finished")
+    scanning_time = runstats.get("elapsed") if runstats is not None else None
+    finished_at = runstats.get("timestr") if runstats is not None else None
+
+    port_map: PortMap = {}
+    hosts_found = 0
 
     for host in root.findall("host"):
         addr_el = host.find("address[@addrtype='ipv4']")
         if addr_el is None:
             continue
 
-        ip = addr_el.get("addr", None)
-        if ip is None:
+        ip = addr_el.get("addr")
+        if not ip:
             continue
 
-        open_ports: List[int] = []
-        services: List[Dict] = []
+        hosts_found += 1
+        ip_ports = port_map.setdefault(ip, {})
+
         ports_parent = host.find("ports")
+        if ports_parent is None:
+            continue
 
-        if ports_parent is not None:
-            for port in ports_parent.findall("port"):
-                portid = port.get("portid")
-                if portid is None:
-                    continue
-                state_el = port.find("state")
-                if state_el is None:
-                    continue
+        for port in ports_parent.findall("port"):
+            portid = port.get("portid")
+            if portid is None:
+                continue
 
-                state_value = state_el.get("state", None)
-                if state_value == "open":
-                    open_ports.append(int(portid))
-                    service_el = port.find("service")
-                    services.append({
-                        "port": int(portid),
-                        "name": service_el.get("name") if service_el is not None else None,
-                        "product": service_el.get("product") if service_el is not None else None,
-                        "version": service_el.get("version") if service_el is not None else None,
-                        "extrainfo": service_el.get("extrainfo") if service_el is not None else None,
-                        "ostype": service_el.get("ostype") if service_el is not None else None,
-                    })
+            state_el = port.find("state")
+            if state_el is None or state_el.get("state") != "open":
+                continue
 
-        runstats = root.find("runstats/finished")
-        scanning_time = runstats.get("elapsed") if runstats is not None else None
-        scan_finished_time = runstats.get("timestr") if runstats is not None else None
+            p = int(portid)
 
-        hosts_summary.append({
-            "ip": ip,
-            "open_ports": open_ports,
-            "services": services,
-        })
+            service_el = port.find("service")
+            meta: ServiceMeta = {
+                "name": service_el.get("name") if service_el is not None else None,
+                "product": service_el.get("product") if service_el is not None else None,
+                "version": service_el.get("version") if service_el is not None else None,
+                "extrainfo": service_el.get("extrainfo") if service_el is not None else None,
+                "ostype": service_el.get("ostype") if service_el is not None else None,
+            }
+
+            existing = ip_ports.get(p, {})
+            ip_ports[p] = {
+                "name": meta.get("name") or existing.get("name"),
+                "product": meta.get("product") or existing.get("product"),
+                "version": meta.get("version") or existing.get("version"),
+                "extrainfo": meta.get("extrainfo") or existing.get("extrainfo"),
+                "ostype": meta.get("ostype") or existing.get("ostype"),
+            }
 
     return {
+        "ok": True,
         "summary": {
-            "hosts_found": len(hosts_summary),
+            "hosts_found": hosts_found,
             "scanning_time": scanning_time,
-            "finished_at": scan_finished_time,
+            "finished_at": finished_at,
         },
-        "hosts": hosts_summary,
+        "port_map": port_map,
     }

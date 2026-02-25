@@ -2,16 +2,27 @@ from typing import Optional, List, Literal
 from pydantic import BaseModel
 
 class SupervisorSchema(BaseModel):
+    user_target: str
     next_step: str
     message: str
 
-class ReconPlannerArguments(BaseModel):
+class PlannerArguments(BaseModel):
     target: Optional[str] = None
     options: Optional[List[str]] = None
+    product: Optional[str] = None
+    version: Optional[str] = None
+    port: Optional[int] = None
 
 class ReconPlannerSchema(BaseModel):
-    done: bool
-    tool: Literal["nmap", "dig", None]
-    arguments: ReconPlannerArguments
+    finished: bool
+    next_tool: Literal["nmap", "dig", None]
+    arguments: PlannerArguments
+    thought: str
+    message_for_supervisor: str
+
+class ExploitPlannerSchema(BaseModel):
+    finished: bool
+    next_tool: Optional[str] = None
+    arguments: PlannerArguments
     thought: str
     message_for_supervisor: str
