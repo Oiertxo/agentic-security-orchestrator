@@ -1,6 +1,9 @@
 import os, json, re
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
-from typing import Any
+from src.state import PortMap
+from src.state import AgentState
+from typing import List, Dict, Any
+from copy import deepcopy
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
 
@@ -127,3 +130,83 @@ def last_ai_planner_message(messages: list[BaseMessage]) -> AIMessage | None:
         if isinstance(m, AIMessage):
             return m
     return None
+
+def merge_port_map(old_map: PortMap, new_map: PortMap) -> PortMap:
+    merged: PortMap = {}
+
+    # Copy old
+    for ip, ports in (old_map or {}).items():
+        merged[ip] = {int(p): deepcopy(meta) for p, meta in (ports or {}).items()}
+
+    # Merge new
+    for ip, ports in (new_map or {}).items():
+        merged.setdefault(ip, {})
+        for p, meta in (ports or {}).items():
+            p = int(p)
+            existing = merged[ip].get(p, {})
+            merged[ip][p] = {
+                "name": meta.get("name") or existing.get("name"),
+                "product": meta.get("product") or existing.get("product"),
+                "version": meta.get("version") or existing.get("version"),
+                "extrainfo": meta.get("extrainfo") or existing.get("extrainfo"),
+                "ostype": meta.get("ostype") or existing.get("ostype"),
+            }
+
+    return merged
+
+def derive_pending_hosts(port_map: PortMap, scanned_hosts: List[str]) -> List[str]:
+    scanned = set(scanned_hosts or [])
+    pending: List[str] = []
+    for ip, ports in (port_map or {}).items():
+        if ip in scanned:
+            continue
+        if ports:
+            pending.append(ip)
+    return pending
+
+def was_version_scan(plan: Dict[str, Any]) -> bool:
+    opts = (plan.get("arguments") or {}).get("options") or []
+    norm = [(opt or "").strip().lower() for opt in opts]
+    return any(
+        o == "-sv"
+        or o.startswith("-sv")
+        or o == "-a"
+        or o == "--version-all"
+    for o in norm
+    )
+
+def target_is_network(target: str) -> bool:
+    return "/" in (target or "")
+
+def last_n_messages(messages, n=8):
+    return messages[-n:]
+
+    
+def supervisor_state_view(state: AgentState) -> dict:
+    recon = state.get("recon", {}) or {}
+    exploit = state.get("exploit", {}) or {}
+
+    port_map = recon.get("port_map", {})
+    trimmed_port_map = {}
+    for host_i, (host, ports) in enumerate(port_map.items()):
+        if host_i >= 20:
+            break
+        trimmed_port_map[host] = dict(list(ports.items())[:50])
+
+    return {
+        "user_target": state.get("user_target"),
+        "next_step": state.get("next_step"),
+        "recon": {
+            "finished": recon.get("finished", False),
+            "scanned_hosts": recon.get("scanned_hosts", []),
+            "port_map": trimmed_port_map,
+            "step_count": recon.get("step_count"),
+        },
+        "exploit": {
+            **exploit
+        },
+        "messages": state.get("messages")
+    }
+
+def get_engine_url() -> str:
+    return os.getenv("EXECUTION_ENGINE_URL", "http://kali-engine:5000")

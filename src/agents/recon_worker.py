@@ -1,26 +1,29 @@
-from langchain_core.messages import AIMessage
-from src.state import AgentState
-from src.subgraphs.recon.subgraph import recon_subgraph
-from src.subgraphs.recon.state import ReconState
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
+from src.state import AgentState, ReconState
+from src.subgraphs.recon.recon_subgraph import recon_subgraph
+from src.logger import logger
+from langfuse import observe
 
-def recon_worker_node(state: AgentState):
-    initial_recon_state: ReconState = {
-        "messages": state["messages"],
-        "results": [],
-        "port_map": {},
-        "scanned_hosts": [],
-        "pending_hosts": [],
-        "done": False,
-        "step_count": 0,
-    }
-
-    out = recon_subgraph.invoke(initial_recon_state)
-
+@observe(name="Recon Worker")
+def recon_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
+    old_recon = state.get("recon") or {}
+    out = recon_subgraph.invoke(state, config)
+    logger.info(f"[RECON_WORKER_NODE] Output: {out}")
+    
+    recon_out: ReconState = out.get("recon") or {}
+    recon_out["finished"] = bool(recon_out.get("finished", False))
     summary = {
-        "steps": out.get("step_count", 0),
-        "results": out.get("results", ["Recon not available"])
+        "steps": recon_out.get("step_count", 0),
+        "results": recon_out.get("results", ["Recon not available"]),
     }
+
     return {
-        "messages": [AIMessage(content=f"[SOURCE: RECON]\n{summary}")],
-        "next_step": "supervisor"
+        "user_target": state.get("user_target"),
+        "next_step": "supervisor",
+        "recon": {
+            **old_recon,
+            **recon_out
+        },
+        "messages": state["messages"] + [HumanMessage(content=f"[SOURCE: RECON]\n{summary}")]
     }

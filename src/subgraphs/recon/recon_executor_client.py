@@ -1,35 +1,34 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
 from src.logger import logger
-import os, time, httpx
-
-def _get_base_url() -> str:
-    return os.getenv("RECON_ENGINE_URL", "http://kali-engine:5000")
+from src.utils import get_engine_url
+from langfuse import observe
+import time, httpx
 
 def _normalize_payload(
-    tool: Optional[str] = None,
+    next_tool: Optional[str] = None,
     args: Optional[Dict[str, Any]] = None,
     plan: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Normalize different call styles into the Recon Engine request schema:
       {
-        "tool": "nmap" | "dig",
+        "next_tool": "nmap" | "dig",
         "target": "192.168.1.13",
         "options": ["-sV", "-Pn"]
       }
 
     Accepts either:
-      - explicit (tool, args) where args contains "target" and optional "options"
-      - a 'plan' dict shaped like {"tool": "...", "arguments": {...}}
+      - explicit (next_tool, args) where args contains "target" and optional "options"
+      - a 'plan' dict shaped like {"next_tool": "...", "arguments": {...}}
 
     Raises ValueError for missing required fields.
     """
     if plan is not None:
-        if tool is not None or args is not None:
-            raise ValueError("Provide either (plan) OR (tool, args), not both.")
+        if next_tool is not None or args is not None:
+            raise ValueError("Provide either (plan) OR (next_tool, args), not both.")
 
-        tool = plan.get("tool")
+        next_tool = plan.get("next_tool")
         arguments = plan.get("arguments", {}) or {}
         target = arguments.get("target")
         options = arguments.get("options", [])
@@ -38,8 +37,8 @@ def _normalize_payload(
         target = arguments.get("target")
         options = arguments.get("options", [])
 
-    if not tool or tool is None:
-        raise ValueError("Missing 'tool' in recon plan.")
+    if not next_tool or next_tool is None:
+        raise ValueError("Missing 'next_tool' in recon plan.")
     if not target:
         raise ValueError("Missing 'target' in recon plan arguments.")
 
@@ -50,14 +49,15 @@ def _normalize_payload(
         raise ValueError("'options' must be a list of strings.")
 
     return {
-        "tool": tool,
+        "next_tool": next_tool,
         "target": target,
         "options": options,
     }
 
+@observe(name="Call: Recon Worker")
 def call_recon_engine(
     *,
-    tool: Optional[str] = None,
+    next_tool: Optional[str] = None,
     args: Optional[Dict[str, Any]] = None,
     plan: Optional[Dict[str, Any]] = None,
     base_url: Optional[str] = None,
@@ -66,9 +66,9 @@ def call_recon_engine(
     backoff_base: float = 0.5,
 ) -> Dict[str, Any]:
     
-    payload = _normalize_payload(tool=tool, args=args, plan=plan)
-    base = base_url or _get_base_url()
-    url = f"{base.rstrip('/')}/run"
+    payload = _normalize_payload(next_tool=next_tool, args=args, plan=plan)
+    base = base_url or get_engine_url()
+    url = f"{base.rstrip('/')}/recon"
 
     attempt = 0
     last_exc: Optional[Exception] = None
@@ -79,7 +79,7 @@ def call_recon_engine(
                 resp = client.post(url, json=payload, headers={"Content-Type": "application/json"})
             try:
                 data = resp.json()
-                logger.info(f"[EXECUTOR_CLIENT] Response: {data["tool"], data["target"], data["options"]}")
+                logger.info(f"[EXECUTOR_CLIENT] Response: {data['next_tool'], data['target'], data['options']}")
             except Exception:
                 data = None
 

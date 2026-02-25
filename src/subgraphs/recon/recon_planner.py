@@ -1,59 +1,67 @@
 from langchain_core.messages import AIMessage
-from src.subgraphs.recon.state import ReconState
+from src.state import AgentState, ReconState, PlannerOutput
 from src.model import get_model
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from src.utils import load_prompt, get_clean_content
-from src.subgraphs.recon.schemas import PlannerSchema
+from src.utils import load_prompt, get_clean_content, last_n_messages
+from src.schemas import ReconPlannerSchema
 from src.logger import logger
-from typing import Dict, Any
+from typing import Dict, Any, cast
+from langfuse import observe
 import json
 
-def recon_planner_node(state: ReconState):
+@observe(name="Recon planner")
+def recon_planner_node(state: AgentState) -> AgentState:
     llm = get_model()
-    RECON_AGENT_PROMPT = load_prompt("recon.txt")
+    system_prompt = load_prompt("recon.txt")
     
     prompt = ChatPromptTemplate.from_messages([
-        ("system", RECON_AGENT_PROMPT),
-        MessagesPlaceholder("messages"),
-        ("human", "Port map (host → open ports): {port_map}"),
-        ("human", "Already version-scanned hosts: {scanned_hosts}"),
-        ("human", "Pending hosts for -sV: {pending_hosts}"),
+        ("system", system_prompt),
+        ("system", "Target requested by the user: {user_target}"),
+        ("system", "Port map (host and their open ports): {port_map}"),
+        ("system", "Already version-scanned hosts: {scanned_hosts}"),
+        ("system", "Pending hosts for -sV: {pending_hosts}"),
+        # MessagesPlaceholder("messages"),
     ])
 
-
-    clean_messages = get_clean_content(state["messages"])
-    
-    variables = {
-        "messages": clean_messages,
-        "port_map": state.get("port_map") or {},
-        "scanned_hosts": state.get("scanned_hosts") or [],
-        "pending_hosts": state.get("pending_hosts") or [],
+    planner_input: Dict[str, Any] = {
+        "user_target": state.get("user_target"),
+        "port_map": (state.get("recon", {}) or {}).get("port_map", {}),
+        "scanned_hosts": (state.get("recon", {}) or {}).get("scanned_hosts", []),
+        "pending_hosts": (state.get("recon", {}) or {}).get("pending_hosts", []),
+        # "messages": last_n_messages(get_clean_content(state["messages"])),
     }
 
-    logger.info(f"[RECON_PLANNER] Calling LLM: {variables}")
+    logger.info(f"[RECON_PLANNER] Calling LLM: {planner_input}")
     
-    chain = (prompt | llm.with_structured_output(PlannerSchema, method="json_mode", strict=True)).with_types(
+    chain = (prompt | llm.with_structured_output(ReconPlannerSchema, method="json_mode", strict=True)).with_types(
         input_type=Dict[str, Any],
-        output_type=PlannerSchema,
+        output_type=ReconPlannerSchema,
     )
 
-    result = PlannerSchema.model_validate(chain.invoke(variables))
+    result = ReconPlannerSchema.model_validate(chain.invoke(planner_input))
     data = result.model_dump(mode="json")
     
     logger.info(f"[RECON_PLANNER] Response from LLM: {data}")
     
-    if not data or (not data.get("done") and not data.get("tool")):
+    if not data or (not data.get("finished") and not data.get("next_tool")):
         logger.error(f"[RECON_PLANNER] Planner failed to reason. Forcing termination")
         data = {
-            "action": "finish",
-            "done": True,
-            "tool": None,
+            "finished": True,
+            "next_tool": None,
             "arguments": {},
             "reason": "Forced finish: LLM returned empty or invalid plan after null results."
         }
-    is_done = result.done
+    is_finished = result.finished
+
+    new_recon: ReconState = {
+        **state.get("recon", {}),
+        "planner": cast(PlannerOutput, data),
+        "finished": is_finished,
+    }
 
     return {
-        "messages": [AIMessage(content=json.dumps(data))],
-        "done": is_done
+        **state,
+        "recon": new_recon,
+        "messages": state.get("messages") + [AIMessage(content=json.dumps(data))],
+        "next_step": "supervisor" if is_finished else "executor"
     }

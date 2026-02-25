@@ -1,7 +1,8 @@
-# requirements.txt
 langgraph
+langchain
 langchain-ollama
 langchain-core
+langfuse
 pydantic
 python-dotenv
 requests

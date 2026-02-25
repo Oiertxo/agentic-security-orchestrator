@@ -3,7 +3,6 @@ FROM ubuntu:22.04
 # Install vulnerable OpenSSH config
 RUN apt update && apt install -y openssh-server && \
     mkdir /var/run/sshd && \
-    echo 'root::0:0:root:/root:/bin/bash' >> /etc/passwd && \
     echo 'PermitRootLogin yes' >> /etc/ssh/sshd_config && \
     echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config && \
     echo 'PermitEmptyPasswords yes' >> /etc/ssh/sshd_config

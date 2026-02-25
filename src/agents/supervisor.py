@@ -1,34 +1,65 @@
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from src.state import AgentState
 from src.model import get_model
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from src.utils import load_prompt
-from src.utils import get_clean_content
+from src.utils import load_prompt, get_clean_content, last_n_messages, supervisor_state_view
 from src.schemas import SupervisorSchema
 from src.logger import logger
 from typing import Dict, Any
+from langfuse import observe
+import json
 
+@observe(name="Supervisor node")
 def supervisor_node(state: AgentState) -> AgentState:
     llm = get_model()
-    SUPERVISOR_INSTRUCTIONS = load_prompt("supervisor.txt")
+    system_prompt = load_prompt("supervisor.txt")
 
-    clean_messages = get_clean_content(state["messages"])
-    
-    prompt_template = ChatPromptTemplate.from_messages([
-        ("system", SUPERVISOR_INSTRUCTIONS),
-        MessagesPlaceholder(variable_name="messages"),
+    supervisor_input = {
+        "state": supervisor_state_view(state)
+    }
+
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_prompt),
+        ("system", "Current State of execution:\n{state}"),
     ])
-    logger.info(f"[SUPERVISOR] Invoking Worker Planner. Messages: {clean_messages}")    
+
+    logger.info(f"[SUPERVISOR] Received state: {state}")
+    logger.info(f"[SUPERVISOR] Invoking Supervisor Planner. Input: {supervisor_input}")
     
-    chain = (prompt_template | llm.with_structured_output(SupervisorSchema)).with_types(
+    chain = (
+        prompt
+        | llm.with_structured_output(SupervisorSchema, method="json_mode", strict=True)
+    ).with_types(
         input_type=Dict[str, Any],
         output_type=SupervisorSchema,
     )
-    response = SupervisorSchema.model_validate(chain.invoke({"messages": clean_messages}))
 
-    logger.info(f"[SUPERVISOR] Worker Planner response: {response}")
+    response: SupervisorSchema = SupervisorSchema.model_validate(chain.invoke(supervisor_input))
 
-    return AgentState(
-        messages=[AIMessage(content=response.message)],
-        next_step=response.next_step
-    )
+    logger.info(f"[SUPERVISOR] Supervisor Planner response: {response}")
+    
+    # recon = state.get("recon", {}) or {}
+    # if recon.get("finished") is True and response.next_step == "recon":
+    #     response.next_step = "exploit"
+
+    exploit = state.get("exploit", {}) or {}
+    if exploit.get("finished") is True and response.next_step != "finish":
+        response.next_step = "finish"
+
+    return {
+        **state,
+        "user_target": response.user_target,
+        "messages": [state["messages"][0], AIMessage(content=response.message)],
+        "next_step": response.next_step
+    }
+
+def get_messages_for_supervisor(messages: list) -> list:
+    clean_history = []
+    
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            clean_history.append(msg)
+        elif isinstance(msg, AIMessage):
+            clean_history.append(msg)
+
+    return clean_history
