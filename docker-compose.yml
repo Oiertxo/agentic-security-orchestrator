@@ -9,6 +9,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./data/logs:/data/logs
+      - ./data/reports:/data/reports
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - MODEL_NAME=${MODEL_NAME}

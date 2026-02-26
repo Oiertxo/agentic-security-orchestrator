@@ -205,7 +205,8 @@ def supervisor_state_view(state: AgentState) -> dict:
         "exploit": {
             **exploit
         },
-        "messages": state.get("messages")
+        "messages": state.get("messages"),
+        "report_finished": state.get("report_finished", False),
     }
 
 def get_engine_url() -> str:

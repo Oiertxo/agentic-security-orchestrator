@@ -13,7 +13,6 @@ class ServiceMeta(TypedDict, total=False):
 PortMap = Dict[str, Dict[int, ServiceMeta]]
 
 class PlannerOutput(TypedDict, total=False):
-    finished: bool
     next_tool: Optional[str]
     arguments: Dict[str, Any]
     thought: str
@@ -46,6 +45,7 @@ class AgentStateRequired(TypedDict):
 class AgentStateOptional(TypedDict, total=False):
     recon: ReconState
     exploit: ExploitState
+    report_finished: bool
 
 class AgentState(AgentStateOptional, AgentStateRequired):
     """Single global state with optional namespaced branches."""
