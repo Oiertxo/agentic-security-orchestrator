@@ -28,6 +28,7 @@ A central **Supervisor Agent** coordinates the workflow:
 
 ### Graphic representation
 
+```mermaid
 graph TD
     classDef ai fill:#f9f,stroke:#333,stroke-width:2px,color:#000;
     classDef container fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000;
@@ -94,6 +95,7 @@ graph TD
 
     Nmap <--"SYN/Version Scan"--> Target
     NVDSearch <--"HTTPS Query (CVSS)"--> NVD_API
+```
 
 ***
 
