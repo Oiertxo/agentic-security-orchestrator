@@ -9,6 +9,7 @@ This project provides a controlled environment where AI agents autonomously perf
 *   **Service fingerprinting**
 *   **Structured reasoning**
 *   **(Soon) Exploitation workflows**
+*   **Final Report Generation**
 
 All operations occur inside a fully isolated Docker network using a hardened Kali engine.
 
@@ -23,7 +24,7 @@ The system uses **LangGraph subgraphs** to coordinate separate reasoning loops f
 
 A central **Supervisor Agent** coordinates the workflow:
 
-    User → Supervisor → Recon Subgraph → Supervisor → Exploit Subgraph → Supervisor (Summary) → User
+    User → Supervisor → Recon Subgraph → Supervisor → Exploit Subgraph → Supervisor → Report → Supervisor → User
 
 ### Graphic representation
 
@@ -33,7 +34,7 @@ graph TD
     classDef external fill:#fff3e0,stroke:#e65100,stroke-width:2px,stroke-dasharray: 5 5,color:#000;
     classDef state fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px,color:#000;
 
-    User(["👤 User Input"]) --> Supervisor
+    User(["👤 User Input"]) <--> Supervisor
 
     subgraph "🛡️ LangGraph Orchestrator"
         Supervisor[("🧠 Supervisor")]:::state
@@ -50,7 +51,7 @@ graph TD
 
         Supervisor --"Next step: Recon"--> ReconPlanner
         Supervisor --"Next step: Exploit"--> ExploitPlanner
-
+        
         ReconPlanner --"Recon findings"--> Supervisor
         ExploitPlanner --"Exploit findings"--> Supervisor
         
@@ -59,6 +60,11 @@ graph TD
         
         ReconExec --"Results & State Update"--> ReconPlanner
         ExploitExec --"Results & State Update"--> ExploitPlanner
+
+        ReportNode["Report"]
+        ReportLogs[("📂 Report logs")]
+        Supervisor <--"Final state"--> ReportNode
+        ReportNode --> ReportLogs
     end
 
     subgraph "🤖 Local AI Inference Engine"
@@ -76,18 +82,18 @@ graph TD
         Logs[("📂 Persistent Logs")]
     end
 
-    ReconExec --"POST /recon"--> KaliAPI
-    ExploitExec --"POST /cve_lookup"--> KaliAPI
+    ReconExec <--"POST /recon"--> KaliAPI
+    ExploitExec <--"POST /cve_lookup"--> KaliAPI
 
-    KaliAPI --> Nmap
-    KaliAPI --> NVDSearch
+    KaliAPI <--> Nmap
+    KaliAPI <--> NVDSearch
     KaliAPI --> Logs
 
     Target["🎯 Target Network (10.255.255.0/24)"]:::external
     NVD_API(("☁️ NIST NVD API")):::external
 
-    Nmap --"SYN/Version Scan"--> Target
-    NVDSearch --"HTTPS Query (CVSS)"--> NVD_API
+    Nmap <--"SYN/Version Scan"--> Target
+    NVDSearch <--"HTTPS Query (CVSS)"--> NVD_API
 
 ***
 
@@ -102,6 +108,7 @@ Runs:
 *   Message/step routing
 *   Nmap summary parsing
 *   Structured LLM calls to perform recon/exploit decisions
+*   Final report generation with findings
 
 ### **2. Kali Engine (Recon + Exploit tools)**
 
@@ -215,10 +222,10 @@ All behind opt‑in environment flags.
 *   Host mapping and version scanning
 *   Designing exploit planner schema
 *   Designing exploit executor
+*   Final Summary Node to generate report of findings
 
 ### 🚧 In Progress
 
-*   Final Summary Node to generate report of findings
 *   Exploit search by Exploit Subgraph
 *   More thorough testing on various targets
 

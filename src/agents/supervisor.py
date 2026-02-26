@@ -38,14 +38,6 @@ def supervisor_node(state: AgentState) -> AgentState:
 
     logger.info(f"[SUPERVISOR] Supervisor Planner response: {response}")
     
-    # recon = state.get("recon", {}) or {}
-    # if recon.get("finished") is True and response.next_step == "recon":
-    #     response.next_step = "exploit"
-
-    exploit = state.get("exploit", {}) or {}
-    if exploit.get("finished") is True and response.next_step != "finish":
-        response.next_step = "finish"
-
     return {
         **state,
         "user_target": response.user_target,

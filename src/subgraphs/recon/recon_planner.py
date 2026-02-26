@@ -1,8 +1,8 @@
 from langchain_core.messages import AIMessage
 from src.state import AgentState, ReconState, PlannerOutput
 from src.model import get_model
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from src.utils import load_prompt, get_clean_content, last_n_messages
+from langchain_core.prompts import ChatPromptTemplate
+from src.utils import load_prompt
 from src.schemas import ReconPlannerSchema
 from src.logger import logger
 from typing import Dict, Any, cast
@@ -20,7 +20,6 @@ def recon_planner_node(state: AgentState) -> AgentState:
         ("system", "Port map (host and their open ports): {port_map}"),
         ("system", "Already version-scanned hosts: {scanned_hosts}"),
         ("system", "Pending hosts for -sV: {pending_hosts}"),
-        # MessagesPlaceholder("messages"),
     ])
 
     planner_input: Dict[str, Any] = {
@@ -28,7 +27,6 @@ def recon_planner_node(state: AgentState) -> AgentState:
         "port_map": (state.get("recon", {}) or {}).get("port_map", {}),
         "scanned_hosts": (state.get("recon", {}) or {}).get("scanned_hosts", []),
         "pending_hosts": (state.get("recon", {}) or {}).get("pending_hosts", []),
-        # "messages": last_n_messages(get_clean_content(state["messages"])),
     }
 
     logger.info(f"[RECON_PLANNER] Calling LLM: {planner_input}")
@@ -52,10 +50,15 @@ def recon_planner_node(state: AgentState) -> AgentState:
             "reason": "Forced finish: LLM returned empty or invalid plan after null results."
         }
     is_finished = result.finished
-
+    new_planner: PlannerOutput = {
+        "next_tool": data.get("next_tool", ""),
+        "arguments": data.get("arguments", {}),
+        "thought": data.get("thought", ""),
+        "message_for_supervisor": data.get("message_for_supervisor", "")
+    }
     new_recon: ReconState = {
         **state.get("recon", {}),
-        "planner": cast(PlannerOutput, data),
+        "planner": new_planner,
         "finished": is_finished,
     }
 
