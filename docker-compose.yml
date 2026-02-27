@@ -39,20 +39,33 @@ services:
       attack_net:
         ipv4_address: 10.255.255.2
 
+  ###########
+  # Targets #
+  ###########
   vuln-target:
     build:
       context: .
       dockerfile: services/targets/Dockerfile
-    container_name: vuln-target
+    container_name: vuln-target-ssh
     expose:
       - "22"
     networks:
       attack_net:
         ipv4_address: 10.255.255.10
 
-  #
-  # Langfuse
-  #
+  metasploitable:
+    image: tleemcjr/metasploitable2
+    container_name: target-metasploitable
+    tty: true
+    stdin_open: true
+    privileged: true 
+    networks:
+      attack_net:
+        ipv4_address: 10.255.255.20
+
+  ############
+  # Langfuse #
+  ############
   langfuse-worker:
     image: docker.io/langfuse/langfuse-worker:3
     restart: always

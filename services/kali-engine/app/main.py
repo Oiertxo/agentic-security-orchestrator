@@ -145,9 +145,9 @@ def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "cve_id": cve_id,
-        "published": published,
-        "last_modified": last_modified,
-        "description": desc,
+        # "published": published,
+        # "last_modified": last_modified,
+        # "description": desc,
         "cvss_v31_base": base_score(cvss_v31),
         "cvss_v30_base": base_score(cvss_v30),
         "cvss_v2_base": base_score(cvss_v2),
@@ -160,7 +160,7 @@ def run(req: ReconRequest):
     ensure_lab_target(req.target)
 
     if req.next_tool == "nmap":
-        ensure_nmap_options(req.options)        
+        ensure_nmap_options(req.options)
         try:
             with open("/etc/nmap-exclude", "r") as f:
                 exclude_ips = f.read().strip()
@@ -172,8 +172,8 @@ def run(req: ReconRequest):
             "-n",
             "-Pn",
             "--max-retries", "1",
-            "--host-timeout", "30s",
-            "-T4",
+            "--host-timeout", "300s",
+            "-T3",
             "-oX", "-",
             "--exclude",
             exclude_ips,
@@ -186,7 +186,7 @@ def run(req: ReconRequest):
 
     try:
         logger.info(f"RECON CONTAINER DEBUG Command: {cmd}")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

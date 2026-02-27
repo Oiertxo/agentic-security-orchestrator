@@ -40,6 +40,7 @@ def recon_executor_node(state: AgentState) -> AgentState:
         summary = {
             "ok": False,
             "error": engine_result.get("error", "Unknown executor error"),
+            "scanning_time": (engine_result.get("summary", {})).get("scanning_time", 0),
             "request": engine_result.get("request"),
             "response": engine_result.get("response"),
         }

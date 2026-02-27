@@ -15,8 +15,6 @@ PortMap = Dict[str, Dict[int, ServiceMeta]]
 class PlannerOutput(TypedDict, total=False):
     next_tool: Optional[str]
     arguments: Dict[str, Any]
-    thought: str
-    message_for_supervisor: str
 
 class ReconState(TypedDict, total=False):
     planner: PlannerOutput
@@ -31,11 +29,12 @@ class ExploitState(TypedDict, total=False):
     planner: PlannerOutput
     results: Annotated[List[dict], operator.add]
     port_map: PortMap
+    analyzed_services: Dict[str, List[int]]
+    pending_services: Dict[str, List[str]]
     attempted: List[Dict[str, Any]]
     finished: bool
     step_count: int
     vulnerabilities: Dict[str, List[Dict[str, Any]]]
-    working_target: Dict[str, Any]
 
 class AgentStateRequired(TypedDict):
     user_target: str

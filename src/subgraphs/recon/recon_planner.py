@@ -53,8 +53,6 @@ def recon_planner_node(state: AgentState) -> AgentState:
     new_planner: PlannerOutput = {
         "next_tool": data.get("next_tool", ""),
         "arguments": data.get("arguments", {}),
-        "thought": data.get("thought", ""),
-        "message_for_supervisor": data.get("message_for_supervisor", "")
     }
     new_recon: ReconState = {
         **state.get("recon", {}),
