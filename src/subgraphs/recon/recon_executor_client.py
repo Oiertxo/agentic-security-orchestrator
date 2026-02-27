@@ -61,7 +61,7 @@ def call_recon_engine(
     args: Optional[Dict[str, Any]] = None,
     plan: Optional[Dict[str, Any]] = None,
     base_url: Optional[str] = None,
-    timeout: float = 60.0,
+    timeout: float = 600.0,
     retries: int = 2,
     backoff_base: float = 0.5,
 ) -> Dict[str, Any]:

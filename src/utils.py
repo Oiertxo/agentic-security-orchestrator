@@ -211,3 +211,11 @@ def supervisor_state_view(state: AgentState) -> dict:
 
 def get_engine_url() -> str:
     return os.getenv("EXECUTION_ENGINE_URL", "http://kali-engine:5000")
+
+def get_cvss_severity(cvss_list):
+    scores = [s for s in cvss_list if s is not None]
+    max_score = max(scores) if scores else 0
+    if max_score >= 9.0: return "CRITICAL"
+    if max_score >= 7.0: return "HIGH"
+    if max_score >= 4.0: return "MEDIUM"
+    return "LOW"

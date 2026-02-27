@@ -17,12 +17,8 @@ class ReconPlannerSchema(BaseModel):
     finished: bool
     next_tool: Literal["nmap", "dig", None]
     arguments: PlannerArguments
-    thought: str
-    message_for_supervisor: str
 
 class ExploitPlannerSchema(BaseModel):
     finished: bool
     next_tool: Optional[str] = None
     arguments: PlannerArguments
-    thought: str
-    message_for_supervisor: str

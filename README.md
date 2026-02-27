@@ -238,6 +238,7 @@ All behind opt‑in environment flags.
 *   Interactive chain-of-thought debugging
 *   Attack graph generation
 *   Automatic mitigation suggestions
+*   Knowledge persistence
 
 ***
 

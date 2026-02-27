@@ -18,24 +18,18 @@ You can plan the next step by responding in the following format. Output ONLY va
        "target": "string or null",
        "options": ["list", "of", "strings"]
   }},
-  "thought": "string explaining your reasoning",
-  "message_for_supervisor": "instructional message for supervisor"
 }}
-
-
-In thought: briefly explain your reasoning.
-In message_for_supervisor: summarise the chosen action.
 
 Rules:
 
 1. If pending_hosts is empty, it means that all hosts have been scanned. Then, generate response for the Supervisor.
-   Return: {{"finished": true, "next_tool": None, "arguments": {{}}, "thought": string, "message_for_supervisor": string}}
+   Return: {{"finished": true, "next_tool": None, "arguments": {{}}}}
 
 2. If port_map is empty, it means that active hosts have not been found yet. Perform one initial scan based on the information you have.
-   Example: {{"finished": false, "next_tool":"nmap", "arguments":{{"target": <network>, "options":["-sS"]}}, "thought": string}}
+   Example: {{"finished": false, "next_tool":"nmap", "arguments":{{"target": <network>, "options":["-sS"]}}}}
 
 3. Otherwise, you must scan the hosts on the open ports of each host to obtain information about the services.
    Target each host in pending_hosts individually on this step.
-   Example: {{"finished": false, "next_tool":"nmap", "arguments":{{"target": <host>, "options":["-sV","-p", "<comma-separated-ports>"]}}, "thought": string}}
+   Example: {{"finished": false, "next_tool":"nmap", "arguments":{{"target": <host>, "options":["-sV","-p", "<comma-separated-ports>"]}}}}
    If you scan a host and fail to obtain information about its services, accept the result and move to the next step.
 If "finished": false, "next_tool" MUST be "nmap" or "dig".
