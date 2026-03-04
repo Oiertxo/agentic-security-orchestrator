@@ -11,7 +11,7 @@ services:
       - ./data/logs:/data/logs
       - ./data/reports:/data/reports
     environment:
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - MODEL_NAME=${MODEL_NAME}
     extra_hosts:
       - "host.docker.internal:host-gateway"
