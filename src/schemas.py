@@ -12,6 +12,7 @@ class PlannerArguments(BaseModel):
     product: Optional[str] = None
     version: Optional[str] = None
     port: Optional[int] = None
+    cve: Optional[str] = None
 
 class ReconPlannerSchema(BaseModel):
     finished: bool

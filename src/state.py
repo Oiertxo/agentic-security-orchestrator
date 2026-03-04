@@ -1,6 +1,7 @@
 from typing import TypedDict, List, Dict, Any, Optional
 from typing_extensions import Annotated
 from langchain_core.messages import BaseMessage
+from pydantic import BaseModel, Field
 import operator
 
 class ServiceMeta(TypedDict, total=False):
@@ -11,6 +12,17 @@ class ServiceMeta(TypedDict, total=False):
     ostype: Optional[str]
 
 PortMap = Dict[str, Dict[int, ServiceMeta]]
+
+class FoundExploit(BaseModel):
+    edb_id: str = Field(..., alias="EDB-ID")
+    title: str = Field(..., alias="Title")
+    path: str = Field(..., alias="Path")
+    platform: str = Field(..., alias="Platform")
+    exploit_type: str = Field(..., alias="Type")
+    verified: bool = Field(..., alias="Verified")
+    target_service: str
+    target_port: int
+    associated_cve: Optional[str] = None
 
 class PlannerOutput(TypedDict, total=False):
     next_tool: Optional[str]
@@ -29,12 +41,14 @@ class ExploitState(TypedDict, total=False):
     planner: PlannerOutput
     results: Annotated[List[dict], operator.add]
     port_map: PortMap
-    analyzed_services: Dict[str, List[int]]
-    pending_services: Dict[str, List[str]]
-    attempted: List[Dict[str, Any]]
+    analyzed_services_for_cve: Dict[str, List[int]]
+    pending_services_for_cve: Dict[str, List[int]]
     finished: bool
     step_count: int
     vulnerabilities: Dict[str, List[Dict[str, Any]]]
+    analyzed_services_for_search: Dict[str, List[int]]
+    pending_services_for_search: Dict[str, List[Dict[str, Any]]]
+    found_exploits: Dict[str, List[FoundExploit]]
 
 class AgentStateRequired(TypedDict):
     user_target: str

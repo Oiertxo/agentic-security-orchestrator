@@ -11,7 +11,7 @@ STRUCTURE REQUIREMENTS:
 3. ## Methodology: Briefly mention the use of an Agentic LangGraph Orchestrator with a Supervisor node, Recon and Exploit Subgraphs and Kali Linux Tooling for discovery and vulnerability correlation.
 4. ## Technical Findings: Present findings in a clean Markdown Table. Order them in descending order of CVSS score. You must create exactly one row for every CVE object provided in the input. Do not omit any service, even if it only has one vulnerability.
    Columns: [Target | Port | Service | Product/Version | CVE ID | CVSS | Severity]
-5. ## Risk Analysis: For each Critical or High finding, provide a one-paragraph "Deep Dive" explaining the real-world impact (e.g., "Potential for Remote Code Execution").
+5. ## Risk Analysis: For each Critical or High finding, provide a one-paragraph "Deep Dive" explaining the real-world impact (e.g., "Potential for Remote Code Execution") and the exploits found on ExploitDB.
 6. ## Remediation Plan: A prioritized list of technical steps to mitigate the risks (e.g., specific version upgrades or configuration hardening).
 
 FORMATTING RULES:

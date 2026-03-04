@@ -19,15 +19,30 @@ def report_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
         ("system", "Target requested by the user: {target}"),
         ("system", "Port map (host and their open ports): {port_map}"),
         ("system", "Vulnerabilities found: {vulnerabilities}"),
+        ("system", "Exploit scripts identified in database: {exploits}")
     ])
 
     recon_data = state.get("recon", {})
     exploit_data = state.get("exploit", {})
 
+    raw_exploits = exploit_data.get("found_exploits", {})
+    formatted_exploits = {}
+    
+    for service, exploit_list in raw_exploits.items():
+        formatted_exploits[service] = [
+            {
+                "id": exp.edb_id,
+                "title": exp.title,
+                "verified": exp.verified,
+                "path": exp.path
+            } for exp in exploit_list
+        ]
+
     planner_input: Dict[str, Any] = {
         "target": state["user_target"],
         "port_map": recon_data.get("port_map", {}),
-        "vulnerabilities": exploit_data.get("vulnerabilities", {})
+        "vulnerabilities": exploit_data.get("vulnerabilities", {}),
+        "exploits": formatted_exploits
     }
 
     logger.info(f"[REPORT_WORKER] Calling LLM: {planner_input}")

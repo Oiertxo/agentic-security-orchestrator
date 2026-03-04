@@ -33,3 +33,5 @@ Rules:
    Example: {{"finished": false, "next_tool":"nmap", "arguments":{{"target": <host>, "options":["-sV","-p", "<comma-separated-ports>"]}}}}
    If you scan a host and fail to obtain information about its services, accept the result and move to the next step.
 If "finished": false, "next_tool" MUST be "nmap" or "dig".
+
+Valid nmap options: -sS, -sV, -p

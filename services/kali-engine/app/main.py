@@ -1,9 +1,8 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, Any
-import logging
 from logging.handlers import RotatingFileHandler
-import subprocess, ipaddress, requests, os, re
+import json, logging, subprocess, ipaddress, requests, os, re
 
 app = FastAPI(title="Execution Engine", version="1.0.0")
 
@@ -51,6 +50,11 @@ class CveLookupRequest(BaseModel):
     # NVD query tuning
     resultsPerPage: int = Field(default=50, ge=1, le=MAX_RESULTS_PER_PAGE)
     maxResults: int = Field(default=200, ge=1, le=MAX_TOTAL_RESULTS)
+
+class SearchsploitRequest(BaseModel):
+    cve: Optional[str] = None
+    product: Optional[str] = None
+    version: Optional[str] = None
 
 def ensure_lab_target(target: str):
     try:
@@ -173,7 +177,7 @@ def run(req: ReconRequest):
             "-Pn",
             "--max-retries", "1",
             "--host-timeout", "300s",
-            "-T3",
+            "-T4",
             "-oX", "-",
             "--exclude",
             exclude_ips,
@@ -275,3 +279,51 @@ def run_mock(req: ReconRequest):
         "stderr": "",
         "returncode": 0,
     }
+
+@app.get("/read_exploit_file")
+def read_exploit(path: str):
+    if not path.startswith("/opt/exploitdb"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        return {"content": f.read()}
+
+@app.post("/search_exploit")
+def search_exploit(request: SearchsploitRequest):
+    """
+    Searches on ExploitDB using CVEs or Product + version.
+    """
+    logger.info(f"SEARCHSPLOIT request: {request}")
+    
+    all_results = []
+    
+    if request.cve:
+        cmd_cve = f"searchsploit --json --cve {request.cve}"
+        logger.info(f"SEARCHSPLOIT command: {cmd_cve}")
+        res_cve = subprocess.run(cmd_cve, shell=True, capture_output=True, text=True)
+        if res_cve.returncode == 0:
+            all_results.extend(json.loads(res_cve.stdout).get("RESULTS_EXPLOIT", []))
+
+    if request.product:
+        query = f"{request.product} {request.version or ''}".strip()
+        cmd_txt = f"searchsploit --json {query}"
+        logger.info(f"SEARCHSPLOIT command: {cmd_txt}")
+        res_txt = subprocess.run(cmd_txt, shell=True, capture_output=True, text=True)
+        if res_txt.returncode == 0:
+            all_results.extend(json.loads(res_txt.stdout).get("RESULTS_EXPLOIT", []))
+
+    unique_exploits = {exp["EDB-ID"]: exp for exp in all_results}.values()
+    sorted_exploits = sorted(list(unique_exploits), 
+                             key=lambda x: (x.get("Verified") == "1"), 
+                             reverse=True)
+
+    return {
+            "query": {
+                "cve": request.cve,
+                "product": request.product,
+                "version": request.version
+            },
+            "count": len(sorted_exploits),
+            "results": sorted_exploits,
+            "status": "success"
+        }
