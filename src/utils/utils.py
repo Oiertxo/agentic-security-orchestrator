@@ -4,12 +4,13 @@ from src.state import PortMap
 from src.state import AgentState
 from typing import List, Dict, Any
 from copy import deepcopy
+from .toon_formatter import port_map_to_toon, vulnerabilities_to_toon, exploits_to_toon, pending_services_for_search_to_toon
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
 
 def load_prompt(filename: str) -> str:
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    prompt_path = os.path.join(base_path, "src/prompts", filename)
+    prompt_path = os.path.join(base_path, "prompts", filename)
     
     with open(prompt_path, "r", encoding="utf-8") as f:
         return f.read().strip()
@@ -199,11 +200,14 @@ def supervisor_state_view(state: AgentState) -> dict:
         "recon": {
             "finished": recon.get("finished", False),
             "scanned_hosts": recon.get("scanned_hosts", []),
-            "port_map": trimmed_port_map,
+            "port_map": port_map_to_toon(trimmed_port_map),
             "step_count": recon.get("step_count"),
         },
         "exploit": {
-            **exploit
+            **exploit,
+            "vulnerabilities": vulnerabilities_to_toon(exploit.get("vulnerabilities", {})),
+            "pending_services_for_search": pending_services_for_search_to_toon(exploit.get("pending_services_for_search", {})),
+            "found_exploits": exploits_to_toon(exploit.get("found_exploits", {}))
         },
         "messages": state.get("messages"),
         "report_finished": state.get("report_finished", False),

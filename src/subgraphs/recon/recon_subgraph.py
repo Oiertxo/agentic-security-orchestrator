@@ -5,7 +5,7 @@ from .recon_executor import recon_executor_node
 from src.logger import logger
 from langfuse import observe
 
-MAX_STEPS = 20
+MAX_STEPS = 40
 
 @observe(name="Recon subgraph")
 def build_recon_subgraph():

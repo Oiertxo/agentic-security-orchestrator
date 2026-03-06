@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Dict, Optional
 from src.logger import logger
-from src.utils import get_engine_url
+from src.utils.utils import get_engine_url
 from langfuse import observe
 import time, httpx
 

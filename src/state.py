@@ -37,6 +37,16 @@ class ReconState(TypedDict, total=False):
     finished: bool
     step_count: int
 
+class CveState(TypedDict, total=False):
+    planner: PlannerOutput
+    results: Annotated[List[dict], operator.add]
+    port_map: PortMap
+    pending_services_for_cve: Dict[str, List[int]]
+    analyzed_services_for_cve: Dict[str, List[int]]
+    finished: bool
+    step_count: int
+    vulnerabilities: Dict[str, List[Dict[str, Any]]]
+
 class ExploitState(TypedDict, total=False):
     planner: PlannerOutput
     results: Annotated[List[dict], operator.add]
@@ -57,6 +67,7 @@ class AgentStateRequired(TypedDict):
 
 class AgentStateOptional(TypedDict, total=False):
     recon: ReconState
+    cve: CveState
     exploit: ExploitState
     report_finished: bool
 
