@@ -149,18 +149,12 @@ Isolated inside `attack_net`:
 
 ## 🔍 Recon Capabilities
 
-✔ Full network scan
-✔ Automatic exclusion of gateway & self
-✔ Structured parsing of Nmap XML into JSON
-✔ Planner-driven version scanning
-✔ Full reasoning loop until no pending hosts
-✔ Supervisor integration
-✔ Clean recon summary output to user
-
-Example output:
-
-    The initial network scan found (on sample target):
-    - 10.255.255.10: SSH (OpenSSH 7.2p2)
+* Full network scan
+* Automatic exclusion of gateway & self
+* Structured parsing of Nmap XML into JSON
+* Planner-driven version scanning
+* Full reasoning loop until no pending hosts
+* Clean recon summary output to user
 
 ***
 
@@ -170,11 +164,10 @@ This is the immediate roadmap.
 
 ### **Phase 1 — Safe Exploit Subgraph**
 
-✔   `exploit_planner` using structured LangGraph schema
 *   `exploit_executor` with sandbox-safe vectors:
-    ✔   SSH banner probe
+    *   SSH banner probe
     *   HTTP header probe
-    ✔   CVE identification (no payload execution)
+    *   CVE identification (no payload execution)
     *   “Would‑exploit” simulation mode
 
 ### **Phase 2 — Controlled Lab Exploits**
@@ -222,15 +215,15 @@ All behind opt‑in environment flags.
 *   LangGraph integration
 *   Supervisor loop implementation
 *   Host mapping and version scanning
-*   Designing exploit planner schema
-*   Designing exploit executor
 *   Final Summary Node to generate report of findings
 *   Exploit search by Exploit Subgraph
 
 ### 🚧 In Progress
 
-
+*   Graph refactoring to modularize nodes
+*   Exploit usage
 *   More thorough testing on various targets
+*   Knowledge persistence
 
 ### 🔜 Future plans
 
@@ -239,7 +232,6 @@ All behind opt‑in environment flags.
 *   Interactive chain-of-thought debugging
 *   Attack graph generation
 *   Automatic mitigation suggestions
-*   Knowledge persistence
 
 ***
 
