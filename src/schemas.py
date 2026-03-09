@@ -12,13 +12,9 @@ class PlannerArguments(BaseModel):
     product: Optional[str] = None
     version: Optional[str] = None
     port: Optional[int] = None
+    cve: Optional[str] = None
 
-class ReconPlannerSchema(BaseModel):
-    finished: bool
-    next_tool: Literal["nmap", "dig", None]
-    arguments: PlannerArguments
-
-class ExploitPlannerSchema(BaseModel):
+class PlannerSchema(BaseModel):
     finished: bool
     next_tool: Optional[str] = None
     arguments: PlannerArguments

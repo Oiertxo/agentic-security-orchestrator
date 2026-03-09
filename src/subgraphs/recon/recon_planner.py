@@ -1,11 +1,12 @@
 from langchain_core.messages import AIMessage
+from langchain_core.prompts import ChatPromptTemplate
 from src.state import AgentState, ReconState, PlannerOutput
 from src.model import get_model
-from langchain_core.prompts import ChatPromptTemplate
-from src.utils import load_prompt
-from src.schemas import ReconPlannerSchema
+from src.utils.utils import load_prompt
+from src.utils.toon_formatter import port_map_to_toon
+from src.schemas import PlannerSchema
 from src.logger import logger
-from typing import Dict, Any, cast
+from typing import Dict, Any
 from langfuse import observe
 import json
 
@@ -24,19 +25,19 @@ def recon_planner_node(state: AgentState) -> AgentState:
 
     planner_input: Dict[str, Any] = {
         "user_target": state.get("user_target"),
-        "port_map": (state.get("recon", {}) or {}).get("port_map", {}),
+        "port_map": port_map_to_toon((state.get("recon", {}) or {}).get("port_map", {})),
         "scanned_hosts": (state.get("recon", {}) or {}).get("scanned_hosts", []),
         "pending_hosts": (state.get("recon", {}) or {}).get("pending_hosts", []),
     }
 
     logger.info(f"[RECON_PLANNER] Calling LLM: {planner_input}")
     
-    chain = (prompt | llm.with_structured_output(ReconPlannerSchema, method="json_mode", strict=True)).with_types(
+    chain = (prompt | llm.with_structured_output(PlannerSchema, method="json_mode", strict=True)).with_types(
         input_type=Dict[str, Any],
-        output_type=ReconPlannerSchema,
+        output_type=PlannerSchema,
     )
 
-    result = ReconPlannerSchema.model_validate(chain.invoke(planner_input))
+    result = PlannerSchema.model_validate(chain.invoke(planner_input))
     data = result.model_dump(mode="json")
     
     logger.info(f"[RECON_PLANNER] Response from LLM: {data}")

@@ -4,12 +4,13 @@ from src.state import PortMap
 from src.state import AgentState
 from typing import List, Dict, Any
 from copy import deepcopy
+from .toon_formatter import port_map_to_toon, vulnerabilities_to_toon, exploits_to_toon, pending_services_for_search_to_toon
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
 
 def load_prompt(filename: str) -> str:
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    prompt_path = os.path.join(base_path, "src/prompts", filename)
+    prompt_path = os.path.join(base_path, "prompts", filename)
     
     with open(prompt_path, "r", encoding="utf-8") as f:
         return f.read().strip()
@@ -186,24 +187,20 @@ def supervisor_state_view(state: AgentState) -> dict:
     recon = state.get("recon", {}) or {}
     exploit = state.get("exploit", {}) or {}
 
-    port_map = recon.get("port_map", {})
-    trimmed_port_map = {}
-    for host_i, (host, ports) in enumerate(port_map.items()):
-        if host_i >= 20:
-            break
-        trimmed_port_map[host] = dict(list(ports.items())[:50])
+    def get_last_result(data_dict):
+        results = data_dict.get("results", [])
+        return results[-1] if results else {}
 
     return {
         "user_target": state.get("user_target"),
-        "next_step": state.get("next_step"),
         "recon": {
             "finished": recon.get("finished", False),
             "scanned_hosts": recon.get("scanned_hosts", []),
-            "port_map": trimmed_port_map,
-            "step_count": recon.get("step_count"),
+            "results": get_last_result(recon)
         },
         "exploit": {
-            **exploit
+            "finished": exploit.get("finished", False),
+            "results": get_last_result(exploit)
         },
         "messages": state.get("messages"),
         "report_finished": state.get("report_finished", False),

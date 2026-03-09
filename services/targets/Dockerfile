@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:16.04
 
 # Install vulnerable OpenSSH config
 RUN apt update && apt install -y openssh-server && \

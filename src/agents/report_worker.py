@@ -6,7 +6,8 @@ from langfuse import observe
 from src.state import AgentState
 from src.logger import logger
 from src.model import get_model
-from src.utils import load_prompt
+from src.utils.utils import load_prompt
+from src.utils.toon_formatter import port_map_to_toon, vulnerabilities_to_toon, exploits_to_toon
 from typing import Dict, Any
 
 @observe(name="Report Worker")
@@ -19,15 +20,18 @@ def report_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
         ("system", "Target requested by the user: {target}"),
         ("system", "Port map (host and their open ports): {port_map}"),
         ("system", "Vulnerabilities found: {vulnerabilities}"),
+        ("system", "Exploit scripts identified in database: {exploits}")
     ])
 
     recon_data = state.get("recon", {})
     exploit_data = state.get("exploit", {})
+    raw_exploits = exploit_data.get("found_exploits", {})
 
     planner_input: Dict[str, Any] = {
         "target": state["user_target"],
-        "port_map": recon_data.get("port_map", {}),
-        "vulnerabilities": exploit_data.get("vulnerabilities", {})
+        "port_map": port_map_to_toon(recon_data.get("port_map", {})),
+        "vulnerabilities": vulnerabilities_to_toon(exploit_data.get("vulnerabilities", {})),
+        "exploits": exploits_to_toon(raw_exploits)
     }
 
     logger.info(f"[REPORT_WORKER] Calling LLM: {planner_input}")

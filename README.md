@@ -160,7 +160,7 @@ Isolated inside `attack_net`:
 Example output:
 
     The initial network scan found (on sample target):
-    - 10.255.255.10: SSH (OpenSSH 8.9p1 Ubuntu)
+    - 10.255.255.10: SSH (OpenSSH 7.2p2)
 
 ***
 
@@ -225,10 +225,11 @@ All behind opt‑in environment flags.
 *   Designing exploit planner schema
 *   Designing exploit executor
 *   Final Summary Node to generate report of findings
+*   Exploit search by Exploit Subgraph
 
 ### 🚧 In Progress
 
-*   Exploit search by Exploit Subgraph
+
 *   More thorough testing on various targets
 
 ### 🔜 Future plans
@@ -239,6 +240,47 @@ All behind opt‑in environment flags.
 *   Attack graph generation
 *   Automatic mitigation suggestions
 *   Knowledge persistence
+
+***
+
+## 🛠 Prerequisites
+
+Before running the orchestrator, ensure your environment meets the following requirements:
+
+### 🖥 Operating System
+
+* **Linux:** Recommended for native Docker performance.
+* **Windows:** Must have **WSL2 (Windows Subsystem for Linux)** installed and configured as the default Docker backend.
+
+### 🐳 Containerization
+
+* **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux).
+* **Docker Compose v2.0+**: Essential for managing the multi-container architecture (Orchestrator, Kali Engine, and Database).
+
+### 🧠 Local AI (LLM)
+
+The system uses **Ollama** to run models locally, ensuring data privacy and zero API costs.
+
+1. **Install Ollama:** Follow instructions at [ollama.com](https://ollama.com).
+2. **Pull Required Models:** Run the following command in your terminal:
+```bash
+ollama pull gemma3:27b  # Or the specific model configured in your .env
+
+```
+
+3. **Service Status:** Ensure Ollama is running on the host. The orchestrator connects via `http://host.docker.internal:11434`.
+
+### 📂 File System & Permissions
+
+The orchestrator requires write permissions to persist intelligence data:
+
+* **Reports Directory:** `/data/reports/` for automated security assessments.
+* **Logging Directory:** `/data/logs/` for automated security assessments.
+* *Note: If running on Linux, ensure the user has UID 1000 permissions or use `chmod` to allow container writes.*
+
+### 🌐 Network Configuration
+
+* The system creates a dedicated internal bridge network (**10.255.255.0/24**). Ensure no local firewall rules (like `iptables` or Windows Firewall) block traffic between Docker containers and the host's Ollama port (11434).
 
 ***
 
