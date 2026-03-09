@@ -12,10 +12,10 @@ LOGIC HIERARCHY (FOLLOW IN ORDER):
    - "next_step": "recon"
    - "message": "Starting reconnaissance on [target]..."
 
-2. WORK IN PROGRESS:
-   - If recon is finished and port_map has data: "next_step": "exploit". If port_map is empty: "next_step": "report".
-   - If exploit is finished: "next_step": "report".
-   - If report is finished (report_finished is true): "next_step": "finish" and a summary of findings on "message" for the user.
+2. WORKERS:
+   - If recon is finished and recon.results has data, set "next_step": "exploit". Else, set "next_step": "report".
+   - If exploit is finished and report_finished is False, set "next_step": "report".
+   - If report is finished (report_finished is True), set "next_step": "finish" and summarize of findings on "message" for the user.
 
 STRICT RESPONSE SCHEMA (JSON ONLY, ALL FIELDS REQUIRED):
 {{

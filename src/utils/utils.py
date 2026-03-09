@@ -187,27 +187,20 @@ def supervisor_state_view(state: AgentState) -> dict:
     recon = state.get("recon", {}) or {}
     exploit = state.get("exploit", {}) or {}
 
-    port_map = recon.get("port_map", {})
-    trimmed_port_map = {}
-    for host_i, (host, ports) in enumerate(port_map.items()):
-        if host_i >= 20:
-            break
-        trimmed_port_map[host] = dict(list(ports.items())[:50])
+    def get_last_result(data_dict):
+        results = data_dict.get("results", [])
+        return results[-1] if results else {}
 
     return {
         "user_target": state.get("user_target"),
-        "next_step": state.get("next_step"),
         "recon": {
             "finished": recon.get("finished", False),
             "scanned_hosts": recon.get("scanned_hosts", []),
-            "port_map": port_map_to_toon(trimmed_port_map),
-            "step_count": recon.get("step_count"),
+            "results": get_last_result(recon)
         },
         "exploit": {
-            **exploit,
-            "vulnerabilities": vulnerabilities_to_toon(exploit.get("vulnerabilities", {})),
-            "pending_services_for_search": pending_services_for_search_to_toon(exploit.get("pending_services_for_search", {})),
-            "found_exploits": exploits_to_toon(exploit.get("found_exploits", {}))
+            "finished": exploit.get("finished", False),
+            "results": get_last_result(exploit)
         },
         "messages": state.get("messages"),
         "report_finished": state.get("report_finished", False),

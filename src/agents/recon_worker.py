@@ -13,10 +13,11 @@ def recon_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
     
     recon_out: ReconState = out.get("recon") or {}
     recon_out["finished"] = bool(recon_out.get("finished", False))
-    summary = {
-        "steps": recon_out.get("step_count", 0),
-        "results": recon_out.get("results", ["Recon not available"]),
-    }
+    executive_summary = (
+        f"[PHASE COMPLETE] Execution finished in {recon_out.get("step_count", 0)} steps. "
+        f"Identified {len(recon_out.get("scanned_hosts", []))} active hosts with {len(recon_out.get("port_map", {}))} services."
+    )
+    recon_out.get("results", []).append({"final_result": executive_summary})
 
     return {
         "user_target": state.get("user_target"),
@@ -25,5 +26,5 @@ def recon_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
             **old_recon,
             **recon_out
         },
-        "messages": state["messages"] + [HumanMessage(content=f"[SOURCE: RECON]\n{summary}")]
+        "messages": state["messages"] + [HumanMessage(content=f"[SOURCE: RECON]\n{executive_summary}")]
     }

@@ -11,7 +11,7 @@ services:
       dockerfile: services/orchestrator/Dockerfile
     container_name: orchestrator_container
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./src:/app/src
       - ./data/logs:/data/logs

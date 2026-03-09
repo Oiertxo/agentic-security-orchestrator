@@ -30,7 +30,7 @@ class PlannerOutput(TypedDict, total=False):
 
 class ReconState(TypedDict, total=False):
     planner: PlannerOutput
-    results: Annotated[List[dict], operator.add]
+    results: List[dict]
     port_map: PortMap
     scanned_hosts: list[str]
     pending_hosts: list[str]
@@ -39,7 +39,7 @@ class ReconState(TypedDict, total=False):
 
 class CveState(TypedDict, total=False):
     planner: PlannerOutput
-    results: Annotated[List[dict], operator.add]
+    results: List[dict]
     port_map: PortMap
     pending_services_for_cve: Dict[str, List[int]]
     analyzed_services_for_cve: Dict[str, List[int]]
@@ -49,7 +49,7 @@ class CveState(TypedDict, total=False):
 
 class ExploitState(TypedDict, total=False):
     planner: PlannerOutput
-    results: Annotated[List[dict], operator.add]
+    results: List[dict]
     port_map: PortMap
     analyzed_services_for_cve: Dict[str, List[int]]
     pending_services_for_cve: Dict[str, List[int]]
@@ -58,7 +58,7 @@ class ExploitState(TypedDict, total=False):
     vulnerabilities: Dict[str, List[Dict[str, Any]]]
     analyzed_services_for_search: Dict[str, List[int]]
     pending_services_for_search: Dict[str, List[Dict[str, Any]]]
-    found_exploits: Dict[str, List[FoundExploit]]
+    found_exploits: Dict[str, List[Dict[str, Any]]]
 
 class AgentStateRequired(TypedDict):
     user_target: str

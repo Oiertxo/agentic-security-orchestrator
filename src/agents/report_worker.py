@@ -7,7 +7,7 @@ from src.state import AgentState
 from src.logger import logger
 from src.model import get_model
 from src.utils.utils import load_prompt
-from src.utils.toon_formatter import port_map_to_toon, vulnerabilities_to_toon
+from src.utils.toon_formatter import port_map_to_toon, vulnerabilities_to_toon, exploits_to_toon
 from typing import Dict, Any
 
 @observe(name="Report Worker")
@@ -25,25 +25,13 @@ def report_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
 
     recon_data = state.get("recon", {})
     exploit_data = state.get("exploit", {})
-
     raw_exploits = exploit_data.get("found_exploits", {})
-    formatted_exploits = {}
-    
-    for service, exploit_list in raw_exploits.items():
-        formatted_exploits[service] = [
-            {
-                "id": exp.edb_id,
-                "title": exp.title,
-                "verified": exp.verified,
-                "path": exp.path
-            } for exp in exploit_list
-        ]
 
     planner_input: Dict[str, Any] = {
         "target": state["user_target"],
         "port_map": port_map_to_toon(recon_data.get("port_map", {})),
         "vulnerabilities": vulnerabilities_to_toon(exploit_data.get("vulnerabilities", {})),
-        "exploits": formatted_exploits
+        "exploits": exploits_to_toon(raw_exploits)
     }
 
     logger.info(f"[REPORT_WORKER] Calling LLM: {planner_input}")

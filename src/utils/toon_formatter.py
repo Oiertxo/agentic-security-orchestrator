@@ -23,46 +23,49 @@ def port_map_to_toon(port_map: dict) -> str:
     return f"{header}\n" + "\n".join(rows)
 
 def vulnerabilities_to_toon(vulnerabilities: dict) -> str:
+    """
+    Converts CVE findings into a compact TOON table including severity labels.
+    Format: target, cve_id, score, severity
+    """
     if not vulnerabilities:
         return "vulnerabilities(0): -"
     
-    total_cves = sum(len(cves) for cves in vulnerabilities.values())
-    header = f"vulnerabilities({total_cves}): target, cve_id, score"
-    rows = []
-    
+    all_rows = []
     for target, cve_list in vulnerabilities.items():
         for cve in cve_list:
             cve_id = cve.get('cve_id', '-')
             score = cve.get('calculated_max_cvss', '-')
-            rows.append(f"{target}, {cve_id}, {score}")
+            severity = cve.get('severity_label', '-').upper()
             
-    return f"{header}\n" + "\n".join(rows)
+            all_rows.append(f"{target}, {cve_id}, {score}, {severity}")
+    
+    if not all_rows:
+        return "vulnerabilities(0): -"
+
+    header = f"vulnerabilities({len(all_rows)}): target, cve_id, score, severity"
+    return f"{header}\n" + "\n".join(all_rows)
 
 def exploits_to_toon(found_exploits: dict) -> str:
     """
-    Converts FoundExploit objects or dicts into compact TOON.
-    Handles both object attribute access and dictionary keys.
+    Converts FoundExploit dicts into compact TOON table.
+    Assumes state is normalized as dictionaries via model_dump().
     """
     if not found_exploits:
         return "exploits(0): -"
         
-    total = sum(len(exps) for exps in found_exploits.values())
-    header = f"exploits({total}): target, edb_id, title"
-    rows = []
-    
+    all_rows = []
     for target, exploits in found_exploits.items():
         for exp in exploits:
-            if hasattr(exp, 'edb_id'):
-                eid = getattr(exp, 'edb_id', '-')
-                title = getattr(exp, 'title', '-')
-            else:
-                eid = exp.get('edb_id', exp.get('id', '-'))
-                title = exp.get('title', '-')
-            
+            eid = exp.get('edb_id', '-')
+            title = exp.get('title', '-')
             clean_title = str(title).replace(",", " ").strip()
-            rows.append(f"{target}, {eid}, {clean_title}")
+            all_rows.append(f"{target}, {eid}, {clean_title}")
             
-    return f"{header}\n" + "\n".join(rows)
+    if not all_rows:
+        return "exploits(0): -"
+
+    header = f"exploits({len(all_rows)}): target, edb_id, title"
+    return f"{header}\n" + "\n".join(all_rows)
 
 def pending_services_for_search_to_toon(pending_data: dict) -> str:
     if not pending_data:
