@@ -10,7 +10,7 @@ import json
 
 @observe(name="Recon executor")
 def recon_executor_node(state: AgentState) -> AgentState:
-    recon_state = state.get("recon", {}) or {}
+    recon_state = state.get("recon", {})
     new_step = int(recon_state.get("step_count", 0)) + 1
 
     raw = state["messages"][-1].content
@@ -23,9 +23,9 @@ def recon_executor_node(state: AgentState) -> AgentState:
             **state,
             "recon": {
                 "step_count": new_step,
-                "port_map": recon_state.get("port_map") or {},
-                "scanned_hosts": recon_state.get("scanned_hosts") or [],
-                "pending_hosts": recon_state.get("pending_hosts") or [],
+                "port_map": recon_state.get("port_map", {}),
+                "scanned_hosts": recon_state.get("scanned_hosts", []),
+                "pending_hosts": recon_state.get("pending_hosts", []),
                 "finished": False,
             },
             "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(result)}")],
@@ -33,8 +33,8 @@ def recon_executor_node(state: AgentState) -> AgentState:
 
     engine_result = call_recon_engine(plan=plan)
 
-    new_port_map = recon_state.get("port_map") or {}
-    new_scanned = recon_state.get("scanned_hosts") or []
+    new_port_map = recon_state.get("port_map", {})
+    new_scanned = recon_state.get("scanned_hosts", [])
 
     if not engine_result.get("ok"):
         summary = {
@@ -45,7 +45,7 @@ def recon_executor_node(state: AgentState) -> AgentState:
             "response": engine_result.get("response"),
         }
     else:
-        response = engine_result.get("response") or {}
+        response = engine_result.get("response", {})
         xml_str = response.get("stdout")
 
         if not xml_str:
@@ -58,10 +58,10 @@ def recon_executor_node(state: AgentState) -> AgentState:
             parsed = parse_nmap_xml(xml_str)
             summary = parsed["summary"]
             
-            new_port_map = merge_port_map(recon_state.get("port_map") or {}, parsed["port_map"])
-            new_scanned = list(recon_state.get("scanned_hosts") or [])
+            new_port_map = merge_port_map(recon_state.get("port_map", {}), parsed["port_map"])
+            new_scanned = list(recon_state.get("scanned_hosts", []))
             if was_version_scan(plan):
-                target = (plan.get("arguments") or {}).get("target")
+                target = (plan.get("arguments", {})).get("target")
                 if target and not target_is_network(target) and target not in new_scanned:
                     new_scanned.append(target)
 
@@ -69,7 +69,7 @@ def recon_executor_node(state: AgentState) -> AgentState:
     logger.info(f"[RECON_EXECUTOR] Recon engine result: {summary}")
     updated_recon: ReconState = {
         **recon_state,
-        "results": (recon_state.get("results") or []) + [summary],
+        "results": (recon_state.get("results", [])) + [summary],
         "step_count": new_step,
         "finished": False,
         "port_map": new_port_map,

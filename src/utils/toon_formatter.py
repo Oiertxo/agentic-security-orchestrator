@@ -45,7 +45,7 @@ def vulnerabilities_to_toon(vulnerabilities: dict) -> str:
     header = f"vulnerabilities({len(all_rows)}): target, cve_id, score, severity"
     return f"{header}\n" + "\n".join(all_rows)
 
-def exploits_to_toon(found_exploits: dict) -> str:
+def found_exploits_to_toon(found_exploits: dict) -> str:
     """
     Converts FoundExploit dicts into compact TOON table.
     Assumes state is normalized as dictionaries via model_dump().
@@ -58,13 +58,14 @@ def exploits_to_toon(found_exploits: dict) -> str:
         for exp in exploits:
             eid = exp.get('edb_id', '-')
             title = exp.get('title', '-')
+            local_path = exp.get('local_path', '-')
             clean_title = str(title).replace(",", " ").strip()
-            all_rows.append(f"{target}, {eid}, {clean_title}")
+            all_rows.append(f"{target}, {eid}, {clean_title}, {local_path}")
             
     if not all_rows:
         return "exploits(0): -"
 
-    header = f"exploits({len(all_rows)}): target, edb_id, title"
+    header = f"exploits({len(all_rows)}): target, edb_id, title, local_path"
     return f"{header}\n" + "\n".join(all_rows)
 
 def pending_services_for_search_to_toon(pending_data: dict) -> str:

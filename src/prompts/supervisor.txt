@@ -12,14 +12,16 @@ LOGIC HIERARCHY (FOLLOW IN ORDER):
    - "next_step": "recon"
    - "message": "Starting reconnaissance on [target]..."
 
-2. WORKERS:
-   - If recon is finished and recon.results has data, set "next_step": "exploit". Else, set "next_step": "report".
+2. WORKERS (follow in order):
+   - If recon is finished and recon.results has data, set "next_step": "cve". Else, set "next_step": "report".
+   - If cve is finished mapping products and versions to CVEs, set "next_step": "vuln_map". Else, set "next_step": "report".
+   - If vuln_map is finished mapping CVEs to exploits, set "next_step": "exploit". Else, set "next_step": "report".
    - If exploit is finished and report_finished is False, set "next_step": "report".
    - If report is finished (report_finished is True), set "next_step": "finish" and summarize of findings on "message" for the user.
 
 STRICT RESPONSE SCHEMA (JSON ONLY, ALL FIELDS REQUIRED):
 {{
   "user_target": "the target of the initial request" | "chat",
-  "next_step": "recon" | "exploit" | "report" | "finish",
+  "next_step": "recon" | "cve" | "vuln_map" | "exploit" | "report" | "finish",
   "message": "Specific instructions or final report"
 }}

@@ -7,11 +7,11 @@ from langfuse import observe
 
 @observe(name="Recon Worker")
 def recon_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
-    old_recon = state.get("recon") or {}
+    old_recon = state.get("recon", {})
     out = recon_subgraph.invoke(state, config)
     logger.info(f"[RECON_WORKER_NODE] Output: {out}")
     
-    recon_out: ReconState = out.get("recon") or {}
+    recon_out: ReconState = out.get("recon", {})
     recon_out["finished"] = bool(recon_out.get("finished", False))
     executive_summary = (
         f"[PHASE COMPLETE] Execution finished in {recon_out.get("step_count", 0)} steps. "

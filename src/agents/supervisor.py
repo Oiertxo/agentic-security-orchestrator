@@ -1,13 +1,12 @@
-from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.prompts import ChatPromptTemplate
 from src.state import AgentState
 from src.model import get_model
-from src.utils.utils import load_prompt, get_clean_content, last_n_messages, supervisor_state_view
+from src.utils.utils import load_prompt, supervisor_state_view
 from src.schemas import SupervisorSchema
 from src.logger import logger
 from typing import Dict, Any
 from langfuse import observe
-import json
 
 @observe(name="Supervisor node")
 def supervisor_node(state: AgentState) -> AgentState:

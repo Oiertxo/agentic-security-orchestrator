@@ -4,7 +4,6 @@ from src.state import PortMap
 from src.state import AgentState
 from typing import List, Dict, Any
 from copy import deepcopy
-from .toon_formatter import port_map_to_toon, vulnerabilities_to_toon, exploits_to_toon, pending_services_for_search_to_toon
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
 
@@ -166,7 +165,7 @@ def derive_pending_hosts(port_map: PortMap, scanned_hosts: List[str]) -> List[st
     return pending
 
 def was_version_scan(plan: Dict[str, Any]) -> bool:
-    opts = (plan.get("arguments") or {}).get("options") or []
+    opts = (plan.get("arguments", {})).get("options", [])
     norm = [(opt or "").strip().lower() for opt in opts]
     return any(
         o == "-sv"
@@ -184,8 +183,10 @@ def last_n_messages(messages, n=8):
 
     
 def supervisor_state_view(state: AgentState) -> dict:
-    recon = state.get("recon", {}) or {}
-    exploit = state.get("exploit", {}) or {}
+    recon = state.get("recon", {})
+    cve = state.get("cve", {})
+    vuln_map = state.get("vuln_map", {})
+    exploit = state.get("exploit", {})
 
     def get_last_result(data_dict):
         results = data_dict.get("results", [])
@@ -197,6 +198,14 @@ def supervisor_state_view(state: AgentState) -> dict:
             "finished": recon.get("finished", False),
             "scanned_hosts": recon.get("scanned_hosts", []),
             "results": get_last_result(recon)
+        },
+        "cve": {
+            "finished": cve.get("finished", False),
+            "results": get_last_result(cve)
+        },
+        "vuln_map": {
+            "finished": vuln_map.get("finished", False),
+            "results": get_last_result(vuln_map)
         },
         "exploit": {
             "finished": exploit.get("finished", False),

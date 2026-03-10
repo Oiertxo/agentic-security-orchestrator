@@ -1,24 +1,23 @@
 from langgraph.graph import StateGraph, END
 from src.state import AgentState
-from .recon_planner import recon_planner_node
-from .recon_executor import recon_executor_node
-from src.logger import logger
+from .cve_planner import cve_planner_node
+from .cve_executor import cve_executor_node
 from langfuse import observe
 
 MAX_STEPS = 40
 
-@observe(name="Recon subgraph")
-def build_recon_subgraph():
+@observe(name="CV subgraph")
+def build_cve_subgraph():
     graph = StateGraph(AgentState)
 
-    graph.add_node("planner", recon_planner_node)
-    graph.add_node("executor", recon_executor_node)
+    graph.add_node("planner", cve_planner_node)
+    graph.add_node("executor", cve_executor_node)
 
     graph.set_entry_point("planner")
 
     def route_from_planner(state: AgentState):
-        step = int((state.get("recon", {})).get("step_count", 0))
-        finished = (state.get("recon", {})).get("finished", False)
+        step = int((state.get("cve", {})).get("step_count", 0))
+        finished = (state.get("cve", {})).get("finished", False)
         if finished or step >= MAX_STEPS:
             return "finish"
         return "executor"
@@ -36,4 +35,4 @@ def build_recon_subgraph():
 
     return graph.compile()
 
-recon_subgraph = build_recon_subgraph()
+cve_subgraph = build_cve_subgraph()

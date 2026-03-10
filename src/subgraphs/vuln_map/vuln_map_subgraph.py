@@ -1,24 +1,24 @@
 from langgraph.graph import StateGraph, END
 from src.state import AgentState
-from .recon_planner import recon_planner_node
-from .recon_executor import recon_executor_node
+from .vuln_map_planner import vuln_map_planner_node
+from .vuln_map_executor import vuln_map_executor_node
 from src.logger import logger
 from langfuse import observe
 
 MAX_STEPS = 40
 
-@observe(name="Recon subgraph")
-def build_recon_subgraph():
+@observe(name="Vuln Map subgraph")
+def build_vuln_map_subgraph():
     graph = StateGraph(AgentState)
 
-    graph.add_node("planner", recon_planner_node)
-    graph.add_node("executor", recon_executor_node)
+    graph.add_node("planner", vuln_map_planner_node)
+    graph.add_node("executor", vuln_map_executor_node)
 
     graph.set_entry_point("planner")
 
     def route_from_planner(state: AgentState):
-        step = int((state.get("recon", {})).get("step_count", 0))
-        finished = (state.get("recon", {})).get("finished", False)
+        step = int((state.get("vuln_map", {})).get("step_count", 0))
+        finished = (state.get("vuln_map", {})).get("finished", False)
         if finished or step >= MAX_STEPS:
             return "finish"
         return "executor"
@@ -36,4 +36,4 @@ def build_recon_subgraph():
 
     return graph.compile()
 
-recon_subgraph = build_recon_subgraph()
+vuln_map_subgraph = build_vuln_map_subgraph()
