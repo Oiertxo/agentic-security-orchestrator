@@ -58,13 +58,14 @@ def found_exploits_to_toon(found_exploits: dict) -> str:
         for exp in exploits:
             eid = exp.get('edb_id', '-')
             title = exp.get('title', '-')
+            local_path = exp.get('local_path', '-')
             clean_title = str(title).replace(",", " ").strip()
-            all_rows.append(f"{target}, {eid}, {clean_title}")
+            all_rows.append(f"{target}, {eid}, {clean_title}, {local_path}")
             
     if not all_rows:
         return "exploits(0): -"
 
-    header = f"exploits({len(all_rows)}): target, edb_id, title"
+    header = f"exploits({len(all_rows)}): target, edb_id, title, local_path"
     return f"{header}\n" + "\n".join(all_rows)
 
 def pending_services_for_search_to_toon(pending_data: dict) -> str:

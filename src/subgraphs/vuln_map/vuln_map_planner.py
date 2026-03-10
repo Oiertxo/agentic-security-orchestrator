@@ -5,6 +5,7 @@ from src.state import AgentState, VulnMapState, PlannerOutput
 from src.schemas import PlannerSchema
 from src.utils.utils import load_prompt
 from src.utils.toon_formatter import port_map_to_toon, vulnerabilities_to_toon, pending_services_for_search_to_toon
+from src.utils.exploit_reader import save_exploit_locally
 from src.logger import logger
 from typing import Dict, Any
 from langfuse import observe
@@ -79,6 +80,18 @@ def vuln_map_planner_node(state: AgentState) -> AgentState:
         }
 
     is_finished = data.get("finished", False)
+
+    found_exploits = vuln_map_state.get("found_exploits", {})
+    if is_finished:
+        for _, exploits in found_exploits.items():
+            for exp in exploits:
+                path_in_kali = exp.get("path", "")
+                edb_id = exp.get("edb_id", "")
+                
+                local_path = save_exploit_locally(path_in_kali, edb_id)
+                if local_path:
+                    exp["local_path"] = local_path
+
     new_planner: PlannerOutput = {
         "next_tool": data.get("next_tool", ""),
         "arguments": data.get("arguments", {}),

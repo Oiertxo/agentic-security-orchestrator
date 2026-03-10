@@ -282,11 +282,23 @@ def run_mock(req: ReconRequest):
 
 @app.get("/read_exploit_file")
 def read_exploit(path: str):
-    if not path.startswith("/opt/exploitdb"):
-        raise HTTPException(status_code=403, detail="Access denied")
+    safe_base = "/opt/exploitdb"
+    absolute_path = os.path.abspath(path)
     
-    with open(path, "r", encoding="utf-8", errors="ignore") as f:
-        return {"content": f.read()}
+    if not absolute_path.startswith(safe_base):
+        raise HTTPException(status_code=403, detail="Access denied: Path is outside exploitdb")
+    
+    if not os.path.exists(absolute_path):
+        raise HTTPException(status_code=404, detail="Exploit file not found")
+
+    try:
+        with open(absolute_path, "r", encoding="utf-8", errors="ignore") as f:
+            return {
+                "path": absolute_path,
+                "content": f.read()
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
 
 @app.post("/search_exploit")
 def search_exploit(request: SearchsploitRequest):
