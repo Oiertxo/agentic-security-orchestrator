@@ -44,6 +44,16 @@ graph TD
             ReconPlanner["Recon Planner"]
             ReconExec["Recon Executor"]
         end
+
+        subgraph "CVE Subgraph"
+            CvePlanner["CVE Planner"]
+            CveExec["CV Executor"]
+        end
+
+        subgraph "Vuln Mapping Subgraph"
+            VulnMapPlanner["Vuln Map Planner"]
+            VulnMapExec["Vuln Map Executor"]
+        end
         
         subgraph "Exploitation Subgraph"
             ExploitPlanner["Exploit Planner"]
@@ -51,15 +61,23 @@ graph TD
         end
 
         Supervisor --"Next step: Recon"--> ReconPlanner
+        Supervisor --"Next step: CVE"--> CvePlanner
+        Supervisor --"Next step: VulnMap"--> VulnMapPlanner
         Supervisor --"Next step: Exploit"--> ExploitPlanner
         
         ReconPlanner --"Recon findings"--> Supervisor
-        ExploitPlanner --"Exploit findings"--> Supervisor
+        CvePlanner --"CVE findings"--> Supervisor
+        VulnMapPlanner --"Exploit findings"--> Supervisor
+        ExploitPlanner --"Exploit results"--> Supervisor
         
         ReconPlanner --"Plan action"--> ReconExec
+        CvePlanner --"Plan action"--> CveExec
+        VulnMapPlanner --"Plan action"--> VulnMapExec
         ExploitPlanner --"Plan action"--> ExploitExec
         
         ReconExec --"Results & State Update"--> ReconPlanner
+        CveExec --"Results & State Update"--> CvePlanner
+        VulnMapExec --"Results & State Update"--> VulnMapPlanner
         ExploitExec --"Results & State Update"--> ExploitPlanner
 
         ReportNode["Report"]
@@ -74,20 +92,27 @@ graph TD
 
     Supervisor <.-> Ollama
     ReconPlanner <.-> Ollama
+    CvePlanner <.-> Ollama
+    VulnMapPlanner <.-> Ollama
     ExploitPlanner <.-> Ollama
 
     subgraph "🐉 Kali Linux Tools Container"
         KaliAPI["FastAPI Engine"]:::container
         Nmap[("Nmap")]
         NVDSearch["NVD Search Script"]
+        ExploitSearch["Searchsploit"]
         Logs[("📂 Persistent Logs")]
+        ExploitDB(("EploitDB"))
     end
 
     ReconExec <--"POST /recon"--> KaliAPI
-    ExploitExec <--"POST /cve_lookup"--> KaliAPI
+    CveExec <--"POST /cve_lookup"--> KaliAPI
+    VulnMapExec <--"POST /search_exploit"--> KaliAPI
+    ExploitExec <--"POST /mock_exploit (planned)"--> KaliAPI
 
     KaliAPI <--> Nmap
     KaliAPI <--> NVDSearch
+    KaliAPI <--> ExploitSearch
     KaliAPI --> Logs
 
     Target["🎯 Target Network (10.255.255.0/24)"]:::external
@@ -95,6 +120,7 @@ graph TD
 
     Nmap <--"SYN/Version Scan"--> Target
     NVDSearch <--"HTTPS Query (CVSS)"--> NVD_API
+    ExploitSearch <--"Query"--> ExploitDB
 ```
 
 ***
