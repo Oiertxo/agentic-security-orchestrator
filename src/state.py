@@ -1,8 +1,6 @@
 from typing import TypedDict, List, Dict, Any, Optional
-from typing_extensions import Annotated
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
-import operator
 
 class ServiceMeta(TypedDict, total=False):
     name: Optional[str]
@@ -40,25 +38,26 @@ class ReconState(TypedDict, total=False):
 class CveState(TypedDict, total=False):
     planner: PlannerOutput
     results: List[dict]
-    port_map: PortMap
     pending_services_for_cve: Dict[str, List[int]]
     analyzed_services_for_cve: Dict[str, List[int]]
     finished: bool
     step_count: int
     vulnerabilities: Dict[str, List[Dict[str, Any]]]
 
-class ExploitState(TypedDict, total=False):
+class VulnMapState(TypedDict, total=False):
     planner: PlannerOutput
     results: List[dict]
-    port_map: PortMap
-    analyzed_services_for_cve: Dict[str, List[int]]
-    pending_services_for_cve: Dict[str, List[int]]
     finished: bool
     step_count: int
-    vulnerabilities: Dict[str, List[Dict[str, Any]]]
     analyzed_services_for_search: Dict[str, List[int]]
     pending_services_for_search: Dict[str, List[Dict[str, Any]]]
     found_exploits: Dict[str, List[Dict[str, Any]]]
+
+class ExploitState(TypedDict, total=False):
+    planner: PlannerOutput
+    results: List[dict]
+    finished: bool
+    step_count: int
 
 class AgentStateRequired(TypedDict):
     user_target: str
@@ -68,6 +67,7 @@ class AgentStateRequired(TypedDict):
 class AgentStateOptional(TypedDict, total=False):
     recon: ReconState
     cve: CveState
+    vuln_map: VulnMapState
     exploit: ExploitState
     report_finished: bool
 

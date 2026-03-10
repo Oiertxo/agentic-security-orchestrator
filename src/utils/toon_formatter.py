@@ -45,7 +45,7 @@ def vulnerabilities_to_toon(vulnerabilities: dict) -> str:
     header = f"vulnerabilities({len(all_rows)}): target, cve_id, score, severity"
     return f"{header}\n" + "\n".join(all_rows)
 
-def exploits_to_toon(found_exploits: dict) -> str:
+def found_exploits_to_toon(found_exploits: dict) -> str:
     """
     Converts FoundExploit dicts into compact TOON table.
     Assumes state is normalized as dictionaries via model_dump().

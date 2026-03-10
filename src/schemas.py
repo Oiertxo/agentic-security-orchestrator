@@ -1,4 +1,4 @@
-from typing import Optional, List, Literal
+from typing import Optional, List
 from pydantic import BaseModel
 
 class SupervisorSchema(BaseModel):

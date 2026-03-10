@@ -124,12 +124,12 @@ def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
     last_modified = cve.get("lastModified")
 
     desc = None
-    for d in (cve.get("descriptions") or []):
+    for d in (cve.get("descriptions", [])):
         if d.get("lang") == "en":
             desc = d.get("value")
             break
 
-    metrics = cve.get("metrics") or {}
+    metrics = cve.get("metrics", {})
 
     def first_metric(metric_key: str) -> Optional[dict[str, Any]]:
         arr = metrics.get(metric_key)
@@ -140,7 +140,7 @@ def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
     def base_score(block: Optional[dict[str, Any]]) -> Optional[float]:
         if not block:
             return None
-        data = block.get("cvssData") or {}
+        data = block.get("cvssData", {})
         return data.get("baseScore")
 
     cvss_v31 = first_metric("cvssMetricV31")
@@ -239,7 +239,7 @@ def cve_lookup(req: CveLookupRequest):
             raise HTTPException(status_code=502, detail=f"NVD returned {r.status_code}: {r.text[:300]}")
 
         data = r.json()
-        vulns = data.get("vulnerabilities") or []
+        vulns = data.get("vulnerabilities", [])
         if not vulns:
             break
 

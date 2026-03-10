@@ -29,7 +29,7 @@ def _normalize_payload(
             raise ValueError("Provide either (plan) OR (next_tool, args), not both.")
 
         next_tool = plan.get("next_tool")
-        arguments = plan.get("arguments", {}) or {}
+        arguments = plan.get("arguments", {})
         target = arguments.get("target")
         options = arguments.get("options", [])
     else:

@@ -25,9 +25,9 @@ def recon_planner_node(state: AgentState) -> AgentState:
 
     planner_input: Dict[str, Any] = {
         "user_target": state.get("user_target"),
-        "port_map": port_map_to_toon((state.get("recon", {}) or {}).get("port_map", {})),
-        "scanned_hosts": (state.get("recon", {}) or {}).get("scanned_hosts", []),
-        "pending_hosts": (state.get("recon", {}) or {}).get("pending_hosts", []),
+        "port_map": port_map_to_toon((state.get("recon", {})).get("port_map", {})),
+        "scanned_hosts": (state.get("recon", {})).get("scanned_hosts", []),
+        "pending_hosts": (state.get("recon", {})).get("pending_hosts", []),
     }
 
     logger.info(f"[RECON_PLANNER] Calling LLM: {planner_input}")
