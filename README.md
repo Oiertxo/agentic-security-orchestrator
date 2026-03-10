@@ -217,16 +217,18 @@ All behind opt‑in environment flags.
 *   Host mapping and version scanning
 *   Final Summary Node to generate report of findings
 *   Exploit search by Exploit Subgraph
+*   Graph refactoring to modularize nodes
 
 ### 🚧 In Progress
 
-*   Graph refactoring to modularize nodes
+*   Knowledge persistence integration
+*   Human-in-the-Loop integration
 *   Exploit usage
 *   More thorough testing on various targets
-*   Knowledge persistence
 
 ### 🔜 Future plans
 
+*   Dedicated GUI
 *   Multi-vector exploit reasoning
 *   Safe-mode vs aggressive-mode flags
 *   Interactive chain-of-thought debugging
