@@ -14,7 +14,7 @@ Rule: Look at "vulnerabilities".
 Set arguments.product and arguments.version to search exploits, but clean the version string first (e.g., use '7.2p2' instead of '7.2p2 Ubuntu 4ubuntu2.10').
 If "vulnerabilities" contains a CVE ID for the target (ip + port): You must set arguments.cve to the CVE (e.g., CVE-2016-1908) as well.
 If "pending_services_for_search" is empty and searching for exploits did not return results (check last_result): set finished: true and end.
-Termination: Set finished: true when "pending_services_for_search" is empty.
+Termination: Set finished: true when "pending_services_for_search" is empty, when value is "pending_search(0): -".
 
 STRICT OUTPUT FORMAT:
 {{
