@@ -10,6 +10,7 @@ vulnerabilities: {vulnerabilities}
 STRICT OPERATIONAL HIERARCHY (Rules):
 
 Exploit Search Phase: If "pending_services_for_search" is NOT empty, your ONLY allowed tool is "searchsploit". Analyze one service at a time, and continue analyzing hosts and services until emptying the list. Once pending_services_for_search in empty, go to the next step.
+Do NOT repeat searches for the same service, if there are no exploits for a service move on.
 Rule: Look at "vulnerabilities".
 Set arguments.product and arguments.version to search exploits, but clean the version string first (e.g., use '7.2p2' instead of '7.2p2 Ubuntu 4ubuntu2.10').
 If "vulnerabilities" contains a CVE ID for the target (ip + port): You must set arguments.cve to the CVE (e.g., CVE-2016-1908) as well.
@@ -26,7 +27,5 @@ STRICT OUTPUT FORMAT:
     "version": "string",
     "port": integer,
     "cve": "string",
-    "options": []
   }},
-  "thought": "your reasoning for the next step"
 }}

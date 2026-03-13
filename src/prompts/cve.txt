@@ -19,7 +19,5 @@ STRICT OUTPUT FORMAT:
     "product": "string",
     "version": "string",
     "port": integer,
-    "options": []
   }},
-  "thought": "your reasoning for the next step"
 }}

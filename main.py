@@ -1,4 +1,4 @@
-import os, sys, requests, uvicorn, aiosqlite, time, json, asyncio
+import os, sys, requests, uvicorn, aiosqlite, time, json, asyncio, contextvars
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -58,8 +58,11 @@ async def chat_endpoint(request: UserRequest):
     
     config: RunnableConfig = {
         "configurable": {"thread_id": thread_id, "start_time": str(time.time())},
+        "recursion_limit": 100,
         "callbacks": [langfuse_handler]
     }
+
+    ctx = contextvars.copy_context()
 
     async def event_generator():
         try:

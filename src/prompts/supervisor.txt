@@ -12,12 +12,12 @@ If the user's message is a greeting (like "hello"), a test, an incomplete messag
    - "next_step": "finish"
    - "message": Respond as a polite security assistant.
 
-Else, continue with the following rules.
+If the user's message is clearly a request for a security analysis, continue with the following rules.
 
 LOGIC HIERARCHY (FOLLOW IN ORDER):
 
 1. NEW ANALYSIS: If the user requests a scan/analysis AND port_map is empty:
-   - "user_target": Extracted target from user message.
+   - "user_target": Extracted target from user message. Usually a host IPv4 direction or network cidr.
    - "next_step": "recon"
    - "message": "Starting reconnaissance on [target]..."
 
@@ -27,3 +27,6 @@ LOGIC HIERARCHY (FOLLOW IN ORDER):
    - If vuln_map is finished mapping CVEs to exploits, set "next_step": "exploit". Else, set "next_step": "report".
    - If exploit is finished and report_finished is False, set "next_step": "report".
    - If report is finished (report_finished is True), set "next_step": "finish" and summarize of findings on "message" for the user.
+
+Context information:
+{state}

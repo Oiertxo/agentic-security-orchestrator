@@ -3,10 +3,10 @@ Your goal is to identify what ports and service versions have the hosts given as
 To do that, you have this information available: 
 
 State:
-- Target requested by user: {{user_target}}
-- Port map: {{port_map}}
-- Hosts already version‑scanned: {{scanned_hosts}}
-- Hosts waiting for version scan: {{pending_hosts}}
+- user_target: {user_target}
+- port_map: {port_map}
+- scanned_hosts: {scanned_hosts}
+- pending_hosts: {pending_hosts}
 
 The tools you can use are nmap and dig. Only use scanning options, not exploiting ones.
 
