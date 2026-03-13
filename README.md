@@ -7,7 +7,7 @@ This project provides a controlled environment where AI agents autonomously perf
 *   **Reconnaissance**
 *   **Scanning**
 *   **Service fingerprinting**
-*   **Structured reasoning**
+*   **CVE assotiation**
 *   **(Soon) Exploitation workflows**
 *   **Final Report Generation**
 
@@ -24,7 +24,7 @@ The system uses **LangGraph subgraphs** to coordinate separate reasoning loops f
 
 A central **Supervisor Agent** coordinates the workflow:
 
-    User → Supervisor → Recon Subgraph → Supervisor → Exploit Subgraph → Supervisor → Report → Supervisor → User
+    User → Supervisor → Recon Subgraph → Supervisor → CVE Subgraph → Supervisor → Vuln Map Subgraph → Supervisor → Exploit Subgraph → Supervisor → Report → Supervisor → User
 
 ### Graphic representation
 
@@ -136,13 +136,14 @@ Runs:
 *   Message/step routing
 *   Nmap summary parsing
 *   Structured LLM calls to perform recon/exploit decisions
+*   Subgraphs for autonomous internal reasoning and executions
 *   Final report generation with findings
 
 ### **2. Kali Engine (Recon + Exploit tools)**
 
 A hardened container that:
 
-*   Executes Nmap, DNS, banner-grabs
+*   Executes Nmap, DNS, banner-grabs, CVE lookups, exploit searches
 *   Applies **dynamic egress firewalling** to ensure:
     *   Only target hosts are reachable
     *   Gateway and self are blocked
@@ -164,6 +165,16 @@ Isolated inside `attack_net`:
     *   Tool selection enforced by structured schema
     *   Handles full cycle:
         *   CIDR → host discovery → port map → version scans → summary
+
+*   **CVE Subgraph (fully implemented)**
+    *   Planner → Executor loop
+    *   Step-by-step searches
+    *   CVE lookup based on Recon findings (services and versions of each target)
+
+*   **Vuln Map Subgraph (fully implemented)**
+    *   Planner → Executor loop
+    *   Step-by-step searches
+    *   Vulnerability to Exploit mapping based on Recon findings and found CVEs (services and versions of each target)
 
 *   **Exploit Subgraph (actively working)**
     *   Will mirror Recon’s architecture
@@ -244,11 +255,12 @@ All behind opt‑in environment flags.
 *   Final Summary Node to generate report of findings
 *   Exploit search by Exploit Subgraph
 *   Graph refactoring to modularize nodes
+*   Knowledge persistence integration
+*   Human-in-the-Loop integration
 
 ### 🚧 In Progress
 
-*   Knowledge persistence integration
-*   Human-in-the-Loop integration
+*   "Would exploit" planning
 *   Exploit usage
 *   More thorough testing on various targets
 
@@ -284,7 +296,7 @@ The system uses **Ollama** to run models locally, ensuring data privacy and zero
 1. **Install Ollama:** Follow instructions at [ollama.com](https://ollama.com).
 2. **Pull Required Models:** Run the following command in your terminal:
 ```bash
-ollama pull gemma3:27b  # Or the specific model configured in your .env
+ollama pull qwen2.5:7b  # Or the specific model configured in your .env
 
 ```
 
