@@ -57,7 +57,7 @@ async def call_search_exploit(
                 try:
                     data = resp.json()
                 except Exception:
-                    data = None
+                    data = {}
 
                 if isinstance(data, dict):
                     count = data.get("count", 0)

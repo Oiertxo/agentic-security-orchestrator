@@ -84,7 +84,7 @@ async def call_cve_lookup(
                 try:
                     data = resp.json()
                 except Exception:
-                    data = None
+                    data = {}
 
                 if isinstance(data, dict):
                     count = data.get("count")

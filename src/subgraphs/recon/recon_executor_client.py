@@ -86,7 +86,7 @@ async def call_recon_engine(
                     if data:
                         logger.info(f"[RECON_EXECUTOR_CLIENT] Response: {data['next_tool'], data['target'], data['options']}")
                 except Exception:
-                    data = None
+                    data = {}
 
                 if resp.status_code < 400:
                     return {
