@@ -6,9 +6,9 @@ from src.logger import logger
 from langfuse import observe
 
 @observe(name="Vuln Map Worker")
-def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
+async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
     old_vuln_map = state.get("vuln_map", {})
-    out = vuln_map_subgraph.invoke(state, config)
+    out = await vuln_map_subgraph.ainvoke(state, config)
     logger.info(f"[VULN_MAP_WORKER_NODE] Output: {out}")
     
     vuln_map_out: VulnMapState = out.get("vuln_map", {})

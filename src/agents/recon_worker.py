@@ -6,9 +6,9 @@ from src.logger import logger
 from langfuse import observe
 
 @observe(name="Recon Worker")
-def recon_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
+async def recon_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
     old_recon = state.get("recon", {})
-    out = recon_subgraph.invoke(state, config)
+    out = await recon_subgraph.ainvoke(state, config)
     logger.info(f"[RECON_WORKER_NODE] Output: {out}")
     
     recon_out: ReconState = out.get("recon", {})

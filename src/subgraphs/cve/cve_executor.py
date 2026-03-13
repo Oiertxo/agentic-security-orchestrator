@@ -1,4 +1,5 @@
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 from src.state import AgentState, CveState
 from src.subgraphs.cve.cve_executor_client import call_cve_lookup
 from src.utils.utils import parse_as_json, get_cvss_severity
@@ -7,7 +8,7 @@ from langfuse import observe
 import json
 
 @observe(name="CVE executor")
-def cve_executor_node(state: AgentState) -> AgentState:
+async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentState:
     logger.info(f"[CVE_EXECUTOR] Received state: {state}")
     old_cve = state.get("cve", {})
     new_step = int(old_cve.get("step_count", 0)) + 1
@@ -16,6 +17,7 @@ def cve_executor_node(state: AgentState) -> AgentState:
     new_analyzed_services_for_cve = {ip: list(ports) for ip, ports in analyzed_services_for_cve.items()}
 
     raw = state["messages"][-1].content
+    logger.info(f"[CVE_EXECUTOR_NODE] plan: {raw}")
     try:
         plan = parse_as_json(raw)
     except Exception:
@@ -31,7 +33,9 @@ def cve_executor_node(state: AgentState) -> AgentState:
     target_ip = args.get("target").split(":")[0]
     target_port = args.get("port")
     
-    engine_result = call_cve_lookup(plan=plan)
+    engine_result = await call_cve_lookup(plan=plan)
+
+    logger.warning(f"Engine_result: {engine_result}")
         
     if engine_result.get("ok"):
         response = engine_result.get("response", {})

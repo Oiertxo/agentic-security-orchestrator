@@ -1,5 +1,6 @@
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableConfig
 from src.state import AgentState
 from src.model import get_model
 from src.utils.utils import load_prompt, supervisor_state_view
@@ -9,7 +10,7 @@ from typing import Dict, Any
 from langfuse import observe
 
 @observe(name="Supervisor node")
-def supervisor_node(state: AgentState) -> AgentState:
+async def supervisor_node(state: AgentState, config: RunnableConfig) -> AgentState:
     llm = get_model()
     system_prompt = load_prompt("supervisor.txt")
 
@@ -33,7 +34,8 @@ def supervisor_node(state: AgentState) -> AgentState:
         output_type=SupervisorSchema,
     )
 
-    response: SupervisorSchema = SupervisorSchema.model_validate(chain.invoke(supervisor_input))
+    raw_response = await chain.ainvoke(supervisor_input, config=config)
+    response: SupervisorSchema = SupervisorSchema.model_validate(raw_response)
 
     logger.info(f"[SUPERVISOR] Supervisor Planner response: {response}")
     

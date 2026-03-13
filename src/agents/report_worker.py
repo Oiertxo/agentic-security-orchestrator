@@ -11,7 +11,7 @@ from src.utils.toon_formatter import port_map_to_toon, vulnerabilities_to_toon, 
 from typing import Dict, Any
 
 @observe(name="Report Worker")
-def report_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
+async def report_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
     llm = get_model()
     system_prompt = load_prompt("report.txt")
     
@@ -38,7 +38,7 @@ def report_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
     
     chain = prompt | llm | StrOutputParser()
 
-    result = chain.invoke(planner_input)
+    result = await chain.ainvoke(planner_input, config=config)
     
     logger.info(f"[REPORT_WORKER] Response from LLM: {result[:20]}")
 
