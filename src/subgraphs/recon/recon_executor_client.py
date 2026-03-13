@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 from src.logger import logger
 from src.utils.utils import get_engine_url
 from langfuse import observe
-import time, httpx
+import httpx, asyncio
 
 def _normalize_payload(
     next_tool: Optional[str] = None,
@@ -55,7 +55,7 @@ def _normalize_payload(
     }
 
 @observe(name="Call: Recon Worker")
-def call_recon_engine(
+async def call_recon_engine(
     *,
     next_tool: Optional[str] = None,
     args: Optional[Dict[str, Any]] = None,
@@ -73,42 +73,48 @@ def call_recon_engine(
     attempt = 0
     last_exc: Optional[Exception] = None
 
-    while attempt <= retries:
-        try:
-            with httpx.Client(timeout=timeout) as client:
-                resp = client.post(url, json=payload, headers={"Content-Type": "application/json"})
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        while attempt <= retries:
             try:
-                data = resp.json()
-                logger.info(f"[EXECUTOR_CLIENT] Response: {data['next_tool'], data['target'], data['options']}")
-            except Exception:
-                data = None
+                resp = await client.post(
+                    url, 
+                    json=payload, 
+                    headers={"Content-Type": "application/json"}
+                )
+                try:
+                    data = resp.json()
+                    if data:
+                        logger.info(f"[RECON_EXECUTOR_CLIENT] Response: {data['next_tool'], data['target'], data['options']}")
+                except Exception:
+                    data = {}
 
-            if resp.status_code < 400:
-                return {
-                    "ok": True,
-                    "status_code": resp.status_code,
-                    "request": payload,
-                    "response": data,
-                    "error": None,
-                }
-            else:
-                # Non-2xx response
-                return {
-                    "ok": False,
-                    "status_code": resp.status_code,
-                    "request": payload,
-                    "response": data,
-                    "error": (data.get("detail") if isinstance(data, dict) and "detail" in data
-                              else f"HTTP {resp.status_code}"),
-                }
+                if resp.status_code < 400:
+                    return {
+                        "ok": True,
+                        "status_code": resp.status_code,
+                        "request": payload,
+                        "response": data,
+                        "error": None,
+                    }
+                else:
+                    # Non-2xx response
+                    return {
+                        "ok": False,
+                        "status_code": resp.status_code,
+                        "request": payload,
+                        "response": data,
+                        "error": (data.get("detail") if isinstance(data, dict) and "detail" in data
+                                else f"HTTP {resp.status_code}"),
+                    }
 
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPError) as e:
-            last_exc = e
-            if attempt == retries:
-                break
-            sleep_s = backoff_base * (2 ** attempt)
-            time.sleep(sleep_s)
-            attempt += 1
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPError) as e:
+                last_exc = e
+                if attempt == retries:
+                    break
+                sleep_s = backoff_base * (2 ** attempt)
+                logger.warning(f"[RECON_EXECUTOR_CLIENT] Retrying recon engine in {sleep_s}s... (Attempt {attempt+1}/{retries})")
+                await asyncio.sleep(sleep_s)
+                attempt += 1
 
     return {
         "ok": False,

@@ -85,3 +85,25 @@ def pending_services_for_search_to_toon(pending_data: dict) -> str:
             rows.append(f"{ip}, {port}, {prod}, {ver}")
             
     return f"{header}\n" + "\n".join(rows)
+
+def get_minimal_toon_context(values: dict) -> str:
+    """
+    Aggregates all TOON-formatted tables into a single compact string
+    to drastically reduce LLM inference time.
+    """
+    target = values.get("user_target", "unknown")
+    port_map = values.get("recon", {}).get("port_map", {})
+    vulnerabilities = values.get("cve", {}).get("vulnerabilities", {})
+    found_exploits = values.get("vuln_map", {}).get("found_exploits", {})
+    
+    toon_report = [
+        f"TARGET_RANGE: {target}",
+        "---",
+        port_map_to_toon(port_map),
+        "---",
+        vulnerabilities_to_toon(vulnerabilities),
+        "---",
+        found_exploits_to_toon(found_exploits)
+    ]
+    
+    return "\n".join(toon_report)

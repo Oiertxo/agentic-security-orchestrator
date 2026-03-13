@@ -1,5 +1,6 @@
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableConfig
 from src.model import get_model
 from src.state import AgentState, VulnMapState, PlannerOutput
 from src.schemas import PlannerSchema
@@ -12,7 +13,7 @@ from langfuse import observe
 import json
 
 @observe(name="Vuln Map planner")
-def vuln_map_planner_node(state: AgentState) -> AgentState:
+async def vuln_map_planner_node(state: AgentState, config: RunnableConfig) -> AgentState:
     llm = get_model()
     system_prompt = load_prompt("vuln_map.txt")
 
@@ -63,7 +64,8 @@ def vuln_map_planner_node(state: AgentState) -> AgentState:
     )
 
     try:
-        result = PlannerSchema.model_validate(chain.invoke(planner_input))
+        raw_result = await chain.ainvoke(planner_input, config=config)
+        result = PlannerSchema.model_validate(raw_result)
         data = result.model_dump(mode="json")
     except Exception as e:
         logger.error(f"[VULN_MAP_PLANNER] Parsing error: {e}")

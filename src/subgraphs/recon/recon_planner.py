@@ -1,5 +1,6 @@
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableConfig
 from src.state import AgentState, ReconState, PlannerOutput
 from src.model import get_model
 from src.utils.utils import load_prompt
@@ -11,7 +12,7 @@ from langfuse import observe
 import json
 
 @observe(name="Recon planner")
-def recon_planner_node(state: AgentState) -> AgentState:
+async def recon_planner_node(state: AgentState, config: RunnableConfig) -> AgentState:
     llm = get_model()
     system_prompt = load_prompt("recon.txt")
     
@@ -37,7 +38,8 @@ def recon_planner_node(state: AgentState) -> AgentState:
         output_type=PlannerSchema,
     )
 
-    result = PlannerSchema.model_validate(chain.invoke(planner_input))
+    raw_result = await chain.ainvoke(planner_input, config=config)
+    result = PlannerSchema.model_validate(raw_result)
     data = result.model_dump(mode="json")
     
     logger.info(f"[RECON_PLANNER] Response from LLM: {data}")

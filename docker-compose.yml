@@ -17,6 +17,7 @@ services:
       - ./data/logs:/data/logs
       - ./data/reports:/data/reports
       - ./data/exploits:/app/data/exploits
+      - ./data/database:/app/data/database
     depends_on:
       langfuse-web:
         condition: service_healthy

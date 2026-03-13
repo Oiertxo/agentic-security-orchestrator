@@ -7,7 +7,7 @@ from src.agents.vuln_map_worker import vuln_map_worker_node
 from src.agents.exploit_worker import exploit_worker_node
 from src.agents.report_worker import report_worker_node
 
-def compile_workflow():
+def compile_workflow(checkpointer):
     workflow = StateGraph(AgentState)
     
     workflow.add_node("supervisor", supervisor_node)
@@ -38,4 +38,4 @@ def compile_workflow():
     workflow.add_edge("exploit", "supervisor")
     workflow.add_edge("report", "supervisor")
     
-    return workflow.compile()
+    return workflow.compile(checkpointer=checkpointer, interrupt_before=["recon", "cve", "vuln_map", "exploit"])

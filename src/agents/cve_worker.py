@@ -6,9 +6,9 @@ from src.logger import logger
 from langfuse import observe
 
 @observe(name="CVE Worker")
-def cve_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
+async def cve_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
     old_cve = state.get("cve", {})
-    out = cve_subgraph.invoke(state, config)
+    out = await cve_subgraph.ainvoke(state, config)
     logger.info(f"[CVE_WORKER_NODE] Output: {out}")
     
     cve_out: CveState = out.get("cve", {})

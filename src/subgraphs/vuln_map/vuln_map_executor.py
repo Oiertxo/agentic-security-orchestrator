@@ -1,4 +1,5 @@
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 from src.state import AgentState, VulnMapState, FoundExploit
 from src.subgraphs.vuln_map.vuln_map_executor_client import call_search_exploit
 from src.utils.utils import parse_as_json
@@ -7,7 +8,7 @@ from langfuse import observe
 import json
 
 @observe(name="Vuln Map executor")
-def vuln_map_executor_node(state: AgentState) -> AgentState:
+async def vuln_map_executor_node(state: AgentState, config: RunnableConfig) -> AgentState:
     logger.info(f"[VULN_MAP_EXECUTOR] Received state: {state}")
     old_vuln_map = state.get("vuln_map", {})
     new_step = int(old_vuln_map.get("step_count", 0)) + 1
@@ -31,7 +32,7 @@ def vuln_map_executor_node(state: AgentState) -> AgentState:
     target_ip = args.get("target").split(":")[0]
     target_port = args.get("port")
     
-    engine_result = call_search_exploit(plan=plan)
+    engine_result = await call_search_exploit(plan=plan)
     
     if engine_result.get("ok"):
         raw_exploits = engine_result.get("response", {}).get("results", [])

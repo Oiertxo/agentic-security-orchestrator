@@ -181,7 +181,6 @@ def target_is_network(target: str) -> bool:
 def last_n_messages(messages, n=8):
     return messages[-n:]
 
-    
 def supervisor_state_view(state: AgentState) -> dict:
     recon = state.get("recon", {})
     cve = state.get("cve", {})

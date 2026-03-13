@@ -1,15 +1,16 @@
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
 from src.state import AgentState, ReconState, PortMap, ServiceMeta
 from src.subgraphs.recon.recon_executor_client import call_recon_engine
 from src.utils.utils import parse_as_json, derive_pending_hosts, merge_port_map, target_is_network, was_version_scan
 from src.logger import logger
 from xml.etree import ElementTree
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 from langfuse import observe
 import json
 
 @observe(name="Recon executor")
-def recon_executor_node(state: AgentState) -> AgentState:
+async def recon_executor_node(state: AgentState, config: RunnableConfig) -> AgentState:
     recon_state = state.get("recon", {})
     new_step = int(recon_state.get("step_count", 0)) + 1
 
@@ -31,7 +32,7 @@ def recon_executor_node(state: AgentState) -> AgentState:
             "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(result)}")],
         }
 
-    engine_result = call_recon_engine(plan=plan)
+    engine_result = await call_recon_engine(plan=plan)
 
     new_port_map = recon_state.get("port_map", {})
     new_scanned = recon_state.get("scanned_hosts", [])
