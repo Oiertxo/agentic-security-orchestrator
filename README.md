@@ -7,7 +7,7 @@ This project provides a controlled environment where AI agents autonomously perf
 *   **Reconnaissance**
 *   **Scanning**
 *   **Service fingerprinting**
-*   **CVE assotiation**
+*   **CVE association**
 *   **(Soon) Exploitation workflows**
 *   **Final Report Generation**
 
