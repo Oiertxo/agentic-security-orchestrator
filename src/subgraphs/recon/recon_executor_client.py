@@ -54,7 +54,7 @@ def _normalize_payload(
         "options": options,
     }
 
-@observe(name="Call: Recon Worker")
+@observe(name="Recon executor client")
 async def call_recon_engine(
     *,
     next_tool: Optional[str] = None,

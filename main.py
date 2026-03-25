@@ -283,7 +283,7 @@ async def audit_log_middleware(request: Request, call_next):
     process_time = (time.time() - start_time) * 1000
     if response.status_code == 404:
         logger.warning(
-            f"[INTRUSION DETECTED] | IP: {host} | Path: {url} | "
+            f"[ACTIVITY DETECTED] | IP: {host} | Path: {url} | "
             f"Agent: {user_agent} | Time: {process_time:.2f}ms"
         )
     return response

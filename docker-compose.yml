@@ -63,15 +63,15 @@ services:
       attack_net:
         ipv4_address: 10.255.255.10
 
-  metasploitable:
-    image: tleemcjr/metasploitable2
-    container_name: target-metasploitable
-    tty: true
-    stdin_open: true
-    privileged: true 
-    networks:
-      attack_net:
-        ipv4_address: 10.255.255.20
+  # metasploitable:
+  #   image: tleemcjr/metasploitable2
+  #   container_name: target-metasploitable
+  #   tty: true
+  #   stdin_open: true
+  #   privileged: true 
+  #   networks:
+  #     attack_net:
+  #       ipv4_address: 10.255.255.20
 
   ############
   # Langfuse #
