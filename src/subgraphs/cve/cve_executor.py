@@ -17,7 +17,7 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
     new_analyzed_services_for_cve = {ip: list(ports) for ip, ports in analyzed_services_for_cve.items()}
 
     raw = state["messages"][-1].content
-    logger.info(f"[CVE_EXECUTOR_NODE] plan: {raw}")
+    logger.info(f"[CVE_EXECUTOR] plan: {raw}")
     try:
         plan = parse_as_json(raw)
     except Exception:
@@ -35,7 +35,7 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
     
     engine_result = await call_cve_lookup(plan=plan)
 
-    logger.warning(f"Engine_result: {engine_result}")
+    logger.info(f"[CVE_EXECUTOR] Engine_result: {engine_result}")
         
     if engine_result.get("ok"):
         response = engine_result.get("response", {})

@@ -20,27 +20,30 @@ async def report_worker_node(state: AgentState, config: RunnableConfig) -> Agent
         ("system", "Target requested by the user: {target}"),
         ("system", "Port map (host and their open ports): {port_map}"),
         ("system", "Vulnerabilities found: {vulnerabilities}"),
-        ("system", "Exploit scripts identified in database: {exploits}")
+        ("system", "Exploit scripts identified in database: {found_exploits}"),
+        ("system", "Exploit findings {exploit_state}")
     ])
 
     recon_data = state.get("recon", {})
     cve_data = state.get("cve", {})
     vuln_map_data = state.get("vuln_map", {})
+    exploit_state = state.get("exploit", {})
 
     planner_input: Dict[str, Any] = {
         "target": state["user_target"],
         "port_map": port_map_to_toon(recon_data.get("port_map", {})),
         "vulnerabilities": vulnerabilities_to_toon(cve_data.get("vulnerabilities", {})),
-        "exploits": found_exploits_to_toon(vuln_map_data.get("found_exploits", {}))
+        "found_exploits": found_exploits_to_toon(vuln_map_data.get("found_exploits", {})),
+        "exploit_state": exploit_state
     }
 
-    logger.info(f"[REPORT_WORKER] Calling LLM: {planner_input}")
+    logger.info(f"[REPORT_WORKER_NODE] Calling LLM: {planner_input}")
     
     chain = prompt | llm | StrOutputParser()
 
     result = await chain.ainvoke(planner_input, config=config)
     
-    logger.info(f"[REPORT_WORKER] Response from LLM: {result[:20]}")
+    logger.info(f"[REPORT_WORKER_NODE] Response from LLM: {result[:20]}")
 
     with open("/data/reports/final_assessment.md", "w") as f:
         f.write(result)

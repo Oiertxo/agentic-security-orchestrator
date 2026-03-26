@@ -46,7 +46,7 @@ async def call_search_exploit(
 
     last_exc: Optional[Exception] = None
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
         for attempt in range(retries + 1):
             try:
                 resp = await client.post(

@@ -21,6 +21,8 @@ services:
     depends_on:
       langfuse-web:
         condition: service_healthy
+      kali-engine:
+        condition: service_healthy
     environment:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
       - MODEL_NAME=${MODEL_NAME}
@@ -44,6 +46,11 @@ services:
     environment:
       - NVD_API_KEY=${NVD_API_KEY}
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     networks:
       mgmt_net:
       attack_net:
@@ -52,26 +59,26 @@ services:
   ###########
   # Targets #
   ###########
-  vuln-target:
-    build:
-      context: .
-      dockerfile: services/targets/Dockerfile
-    container_name: vuln-target-ssh
-    expose:
-      - "22"
-    networks:
-      attack_net:
-        ipv4_address: 10.255.255.10
-
-  # metasploitable:
-  #   image: tleemcjr/metasploitable2
-  #   container_name: target-metasploitable
-  #   tty: true
-  #   stdin_open: true
-  #   privileged: true 
+  # vuln-target:
+  #   build:
+  #     context: .
+  #     dockerfile: services/targets/Dockerfile
+  #   container_name: vuln-target-ssh
+  #   expose:
+  #     - "22"
   #   networks:
   #     attack_net:
-  #       ipv4_address: 10.255.255.20
+  #       ipv4_address: 10.255.255.10
+
+  metasploitable:
+    image: tleemcjr/metasploitable2
+    container_name: target-metasploitable
+    tty: true
+    stdin_open: true
+    privileged: true 
+    networks:
+      attack_net:
+        ipv4_address: 10.255.255.20
 
   ############
   # Langfuse #

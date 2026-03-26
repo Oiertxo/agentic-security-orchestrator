@@ -13,7 +13,8 @@ STRUCTURE REQUIREMENTS:
    Columns: [Target | Port | Service | Product/Version | CVE ID | MAX-CVSS | Severity]
 5. ## Risk Analysis: For each Critical or High finding, provide a one-paragraph "Deep Dive" explaining the real-world impact (e.g., "Potential for Remote Code Execution") and the exploits found on ExploitDB.
 6. ## Include a technical table for every identified exploit, showing the Target IP, the EDB-ID, the Exploit Title and the local_path.
-7. ## Remediation Plan: A prioritized list of technical steps to mitigate the risks (e.g., specific version upgrades or configuration hardening).
+7. ## Detail the exploitation path that led to the targets being compromised, or how the system failed to compromise them and how they resisted.
+8. ## Remediation Plan: A prioritized list of technical steps to mitigate the risks (e.g., specific version upgrades or configuration hardening).
 
 FORMATTING RULES:
 - Output ONLY the Markdown content.

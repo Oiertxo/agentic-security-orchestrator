@@ -73,7 +73,7 @@ async def call_recon_engine(
     attempt = 0
     last_exc: Optional[Exception] = None
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
         while attempt <= retries:
             try:
                 resp = await client.post(
@@ -112,7 +112,7 @@ async def call_recon_engine(
                 if attempt == retries:
                     break
                 sleep_s = backoff_base * (2 ** attempt)
-                logger.warning(f"[RECON_EXECUTOR_CLIENT] Retrying recon engine in {sleep_s}s... (Attempt {attempt+1}/{retries})")
+                logger.warning(f"[RECON_EXECUTOR_CLIENT] Error: {str(e)}. Retrying recon engine in {sleep_s}s... (Attempt {attempt+1}/{retries})", exc_info=True)
                 await asyncio.sleep(sleep_s)
                 attempt += 1
 

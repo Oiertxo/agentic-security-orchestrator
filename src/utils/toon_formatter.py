@@ -107,3 +107,42 @@ def get_minimal_toon_context(values: dict) -> str:
     ]
     
     return "\n".join(toon_report)
+
+def thoughts_to_toon(thought_log) -> str:
+    if not thought_log:
+        return ""
+
+    formatted_steps = []
+    
+    noise_patterns = [
+        "Welcome to Ubuntu", " * ", "Documentation:", "Management:", 
+        "Support:", "Last login:", "Pseudo-terminal", "Warning: Permanently added",
+        "mesg: ttyname failed"
+    ]
+    
+    tech_errors = ["TabError", "SyntaxError", "No such file", "IndentationError", "can't open file"]
+
+    for entry in thought_log:
+        step = entry.get("step", "?")
+        action = entry.get("action", "Unknown")
+        raw_result = entry.get("result", "No result recorded")
+        
+        if any(err in str(raw_result) for err in tech_errors):
+            clean_result = "FAILED: Technical error (Script incompatible or environment issue)."
+        
+        else:
+            lines = str(raw_result).splitlines()
+            filtered_lines = [
+                line.strip() for line in lines 
+                if not any(noise in line for noise in noise_patterns) and line.strip()
+            ]
+            
+            clean_result = "\n".join(filtered_lines) if filtered_lines else str(raw_result)[:100]
+            
+            if len(clean_result) > 200:
+                clean_result = clean_result[:200] + " [...]"
+
+        step_str = f"[S{step}] Action: {action} -> Result: {clean_result}"
+        formatted_steps.append(step_str)
+
+    return "\n".join(formatted_steps)

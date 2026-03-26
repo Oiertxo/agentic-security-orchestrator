@@ -58,6 +58,8 @@ class ExploitState(TypedDict, total=False):
     results: List[dict]
     finished: bool
     step_count: int
+    thought_log: List[Dict[str, Any]]
+    compromised_targets: Dict[str, Dict]
 
 class AgentStateRequired(TypedDict):
     user_target: str

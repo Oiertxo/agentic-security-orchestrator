@@ -6,6 +6,11 @@ class SupervisorSchema(BaseModel):
     next_step: str
     message: str
 
+class ThoughtSchema(BaseModel):
+    step: int
+    action: str
+    reasoning: str
+
 class PlannerArguments(BaseModel):
     target: Optional[str] = None
     options: Optional[List[str]] = None
@@ -18,3 +23,8 @@ class PlannerSchema(BaseModel):
     finished: bool
     next_tool: Optional[str] = None
     arguments: PlannerArguments
+    thought: Optional[ThoughtSchema] = None
+
+class ExploitSchema(BaseModel):
+    command: str
+    reasoning: str

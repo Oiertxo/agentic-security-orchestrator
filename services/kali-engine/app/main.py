@@ -56,6 +56,9 @@ class SearchsploitRequest(BaseModel):
     product: Optional[str] = None
     version: Optional[str] = None
 
+class ExploitRequest(BaseModel):
+    command: str
+
 def ensure_lab_target(target: str):
     try:
         # Accept both single IPs and CIDR networks
@@ -339,3 +342,34 @@ def search_exploit(request: SearchsploitRequest):
             "results": sorted_exploits,
             "status": "success"
         }
+
+@app.post("/exploit")
+def exploit(request: ExploitRequest):
+    cmd = request.command
+    if not cmd:
+        return {"status": "error", "message": "No command received"}
+    
+    if "ssh " in cmd and "-o StrictHostKeyChecking" not in cmd:
+        cmd = cmd.replace("ssh ", "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ", 1)
+
+    logger.info(f"[EXPLOIT] Command: {cmd}")
+
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+
+    logger.info(f"[EXPLOIT RESULT]: {result}")
+
+    status = "success" if result.returncode == 0 else "failed"
+    
+    return {
+        "command": cmd,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "returncode": result.returncode,
+        "status": status
+    }
+
+@app.get("/health")
+def health():
+    return {
+        "status": "ok"
+    }
