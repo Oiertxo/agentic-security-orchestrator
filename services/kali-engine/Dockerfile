@@ -44,8 +44,6 @@ RUN apt-get update && \
     && sed -i '1000i msfadmin' /usr/share/wordlists/rockyou.txt \
     && update-ca-certificates \
     && GIT_SSL_NO_VERIFY=true git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb \
-    && GIT_SSL_NO_VERIFY=true git clone --depth 1 https://gitlab.com/exploit-database/exploitdb-papers /opt/exploitdb-papers \
-    && (searchsploit -u || true) \
     && ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
