@@ -224,3 +224,9 @@ def get_cvss_severity(cvss_list):
     if max_score >= 7.0: return "HIGH"
     if max_score >= 4.0: return "MEDIUM"
     return "LOW"
+
+
+def normalize_newlines_python(script: str) -> str:
+    script = re.sub(r'(?<!b)"\\n', '"\n', script)
+    script = re.sub(r"(?<!b)'\\n", "'\n", script)
+    return script

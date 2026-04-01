@@ -10,7 +10,7 @@ llm = ChatOllama(
     base_url = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
     num_ctx=16384,
     num_gpu=-1,
-    repeat_penalty=1.2
+    repeat_penalty=1.2,
 )
 
 def get_model():

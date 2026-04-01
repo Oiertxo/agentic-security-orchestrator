@@ -277,10 +277,10 @@ networks:
 
 volumes:
   langfuse_postgres_data:
-    driver: local
+    external: true
   langfuse_clickhouse_data:
-    driver: local
+    external: true
   langfuse_clickhouse_logs:
-    driver: local
+    external: true
   langfuse_minio_data:
-    driver: local
+    external: true

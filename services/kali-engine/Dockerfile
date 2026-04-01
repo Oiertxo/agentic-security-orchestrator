@@ -29,6 +29,7 @@ RUN apt-get update && \
     python3-pip \
     python3-venv \
     python3-dev \
+    python3-full \
     python-is-python3 \
     libffi-dev \
     libssl-dev \

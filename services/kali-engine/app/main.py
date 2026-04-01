@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, Any
 from logging.handlers import RotatingFileHandler
-import json, logging, subprocess, ipaddress, requests, os, re
+import json, logging, subprocess, ipaddress, requests, os, re, base64
 
 app = FastAPI(title="Execution Engine", version="1.0.0")
 
@@ -29,6 +29,8 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 logger = logging.getLogger("kali-engine")
 
@@ -349,22 +351,18 @@ def exploit(request: ExploitRequest):
     if not cmd:
         return {"status": "error", "message": "No command received"}
     
-    if "ssh " in cmd and "-o StrictHostKeyChecking" not in cmd:
-        cmd = cmd.replace("ssh ", "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ", 1)
-
     logger.info(f"[EXPLOIT] Command: {cmd}")
 
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
     logger.info(f"[EXPLOIT RESULT]: {result}")
 
-    status = "success" if result.returncode == 0 else "failed"
+    status = "ok" if result.returncode == 0 else "error"
     
     return {
         "command": cmd,
         "stdout": result.stdout,
         "stderr": result.stderr,
-        "returncode": result.returncode,
         "status": status
     }
 
@@ -373,3 +371,15 @@ def health():
     return {
         "status": "ok"
     }
+
+class FileUpdateRequest(BaseModel):
+    path: str
+    content_b64: str
+
+
+@app.patch("/update_exploit")
+def update_exploit(req: FileUpdateRequest):
+    script = base64.b64decode(req.content_b64).decode("utf-8")
+    with open(req.path, "w", encoding="utf-8") as f:
+        f.write(script)
+    return {"status": "ok"}

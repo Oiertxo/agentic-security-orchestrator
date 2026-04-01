@@ -93,7 +93,6 @@ async def vuln_map_planner_node(state: AgentState, config: RunnableConfig) -> Ag
                 local_path = save_exploit_locally(path_in_kali, edb_id)
                 if local_path:
                     exp["local_path"] = local_path
-                    exp["kali_path"] = path_in_kali
 
     new_planner: PlannerOutput = {
         "next_tool": data.get("next_tool", ""),

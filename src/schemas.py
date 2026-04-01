@@ -28,3 +28,12 @@ class PlannerSchema(BaseModel):
 class ExploitSchema(BaseModel):
     command: str
     reasoning: str
+
+class ExploitOutputClassifierSchema(BaseModel):
+    classification: str
+    reasoning: str
+
+class ExploitFixerSchema(BaseModel):
+    result: str
+    fixed_script: Optional[str] = None
+    reasoning: str
