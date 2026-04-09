@@ -1,25 +1,31 @@
-import os, json, re
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
-from src.state import PortMap
-from src.state import AgentState
-from typing import List, Dict, Any
+import json
+import os
+import re
 from copy import deepcopy
+from typing import Any, Dict, List
+
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+
+from src.state import AgentState, PortMap
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
+
 
 def load_prompt(filename: str) -> str:
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     prompt_path = os.path.join(base_path, "prompts", filename)
-    
+
     with open(prompt_path, "r", encoding="utf-8") as f:
         return f.read().strip()
-    
+
+
 def _strip_code_fences(s: str) -> str:
     """Remove triple backtick fences, with or without 'json' tag."""
     s = s.strip()
     if s.startswith("```"):
         s = _JSON_FENCE_RE.sub("", s).strip()
     return s
+
 
 def _extract_first_json_object(s: str) -> str | None:
     """
@@ -37,8 +43,9 @@ def _extract_first_json_object(s: str) -> str | None:
         elif ch == "}":
             depth -= 1
             if depth == 0:
-                return s[start:i+1]
+                return s[start : i + 1]
     return None
+
 
 def parse_as_json(x: Any) -> Any:
     """
@@ -100,6 +107,7 @@ def parse_as_json(x: Any) -> Any:
     # Fallback unsupported type
     raise ValueError(f"Unsupported JSON input type: {type(x)}")
 
+
 def get_clean_content(messages):
     clean_content = []
     for m in messages:
@@ -119,17 +127,22 @@ def last_user_message(messages: list[BaseMessage]) -> HumanMessage | None:
             return m
     return None
 
+
 def last_recon_summary(messages: list[BaseMessage]) -> HumanMessage | None:
     for m in reversed(messages):
-        if isinstance(m, HumanMessage) and str(m.content).startswith("[SOURCE: recon_engine]"):
+        if isinstance(m, HumanMessage) and str(m.content).startswith(
+            "[SOURCE: recon_engine]"
+        ):
             return m
     return None
+
 
 def last_ai_planner_message(messages: list[BaseMessage]) -> AIMessage | None:
     for m in reversed(messages):
         if isinstance(m, AIMessage):
             return m
     return None
+
 
 def merge_port_map(old_map: PortMap, new_map: PortMap) -> PortMap:
     merged: PortMap = {}
@@ -154,6 +167,7 @@ def merge_port_map(old_map: PortMap, new_map: PortMap) -> PortMap:
 
     return merged
 
+
 def derive_pending_hosts(port_map: PortMap, scanned_hosts: List[str]) -> List[str]:
     scanned = set(scanned_hosts or [])
     pending: List[str] = []
@@ -164,22 +178,23 @@ def derive_pending_hosts(port_map: PortMap, scanned_hosts: List[str]) -> List[st
             pending.append(ip)
     return pending
 
+
 def was_version_scan(plan: Dict[str, Any]) -> bool:
     opts = (plan.get("arguments", {})).get("options", [])
     norm = [(opt or "").strip().lower() for opt in opts]
     return any(
-        o == "-sv"
-        or o.startswith("-sv")
-        or o == "-a"
-        or o == "--version-all"
-    for o in norm
+        o == "-sv" or o.startswith("-sv") or o == "-a" or o == "--version-all"
+        for o in norm
     )
+
 
 def target_is_network(target: str) -> bool:
     return "/" in (target or "")
 
+
 def last_n_messages(messages, n=8):
     return messages[-n:]
+
 
 def supervisor_state_view(state: AgentState) -> dict:
     recon = state.get("recon", {})
@@ -196,33 +211,38 @@ def supervisor_state_view(state: AgentState) -> dict:
         "recon": {
             "finished": recon.get("finished", False),
             "scanned_hosts": recon.get("scanned_hosts", []),
-            "results": get_last_result(recon)
+            "results": get_last_result(recon),
         },
         "cve": {
             "finished": cve.get("finished", False),
-            "results": get_last_result(cve)
+            "results": get_last_result(cve),
         },
         "vuln_map": {
             "finished": vuln_map.get("finished", False),
-            "results": get_last_result(vuln_map)
+            "results": get_last_result(vuln_map),
         },
         "exploit": {
             "finished": exploit.get("finished", False),
-            "results": get_last_result(exploit)
+            "results": get_last_result(exploit),
         },
         "messages": state.get("messages"),
         "report_finished": state.get("report_finished", False),
     }
 
+
 def get_engine_url() -> str:
     return os.getenv("EXECUTION_ENGINE_URL", "http://kali-engine:5000")
+
 
 def get_cvss_severity(cvss_list):
     scores = [s for s in cvss_list if s is not None]
     max_score = max(scores) if scores else 0
-    if max_score >= 9.0: return "CRITICAL"
-    if max_score >= 7.0: return "HIGH"
-    if max_score >= 4.0: return "MEDIUM"
+    if max_score >= 9.0:
+        return "CRITICAL"
+    if max_score >= 7.0:
+        return "HIGH"
+    if max_score >= 4.0:
+        return "MEDIUM"
     return "LOW"
 
 

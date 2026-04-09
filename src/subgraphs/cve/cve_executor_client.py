@@ -1,8 +1,12 @@
-import httpx, asyncio
-from src.utils.utils import get_engine_url
-from typing import Optional, Dict, Any
-from src.logger import logger
+import asyncio
+from typing import Any, Dict, Optional
+
+import httpx
 from langfuse import observe
+
+from src.logger import logger
+from src.utils.utils import get_engine_url
+
 
 def _normalize_cve_lookup_payload(
     *,
@@ -20,7 +24,9 @@ def _normalize_cve_lookup_payload(
     if plan is not None:
         next_tool = plan.get("next_tool")
         if next_tool != "cve_lookup":
-            raise ValueError(f"CVE executor only supports next_tool='cve_lookup' for MVP, got: {next_tool}")
+            raise ValueError(
+                f"CVE executor only supports next_tool='cve_lookup' for MVP, got: {next_tool}"
+            )
         arguments = plan.get("arguments", {})
     else:
         arguments = args or {}
@@ -52,6 +58,7 @@ def _normalize_cve_lookup_payload(
     payload = {k: v for k, v in payload.items() if v is not None}
     return payload
 
+
 @observe(name="CVE executor client")
 async def call_cve_lookup(
     *,
@@ -77,9 +84,7 @@ async def call_cve_lookup(
         for attempt in range(retries + 1):
             try:
                 resp = await client.post(
-                    url, 
-                    json=payload, 
-                    headers={"Content-Type": "application/json"}
+                    url, json=payload, headers={"Content-Type": "application/json"}
                 )
                 try:
                     data = resp.json()
@@ -88,7 +93,9 @@ async def call_cve_lookup(
 
                 if isinstance(data, dict):
                     count = data.get("count")
-                    logger.info(f"[CVE_EXECUTOR_CLIENT] CVE lookup ok={resp.status_code<400} product={payload.get('product')} count={count}")
+                    logger.info(
+                        f"[CVE_EXECUTOR_CLIENT] CVE lookup ok={resp.status_code < 400} product={payload.get('product')} count={count}"
+                    )
                     pass
 
                 if resp.status_code < 400:
@@ -105,16 +112,21 @@ async def call_cve_lookup(
                     "status_code": resp.status_code,
                     "request": payload,
                     "response": data,
-                    "error": (data.get("detail") if isinstance(data, dict) and "detail" in data
-                            else f"HTTP {resp.status_code}"),
+                    "error": (
+                        data.get("detail")
+                        if isinstance(data, dict) and "detail" in data
+                        else f"HTTP {resp.status_code}"
+                    ),
                 }
 
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPError) as e:
                 last_exc = e
                 if attempt == retries:
                     break
-                sleep_s = backoff_base * (2 ** attempt)
-                logger.warning(f"[CVE_EXECUTOR_CLIENT] Retrying cve search in {sleep_s}s... (Attempt {attempt+1}/{retries})")
+                sleep_s = backoff_base * (2**attempt)
+                logger.warning(
+                    f"[CVE_EXECUTOR_CLIENT] Retrying cve search in {sleep_s}s... (Attempt {attempt + 1}/{retries})"
+                )
                 await asyncio.sleep(sleep_s)
                 attempt += 1
 

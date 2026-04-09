@@ -1,10 +1,13 @@
-from typing import List, Dict, Any
-import socket, time, re, logging
+import logging
+import re
+import socket
+import time
+from typing import Any, Dict, List
 
 logger = logging.getLogger("kali-engine.executor.trigger_bind_shell")
 
+
 class TriggerBindShellExecutor:
-    
     def __init__(
         self,
         host: str,

@@ -1,11 +1,13 @@
-from langgraph.graph import StateGraph, END
-from src.state import AgentState
-from .vuln_map_planner import vuln_map_planner_node
-from .vuln_map_executor import vuln_map_executor_node
-from src.logger import logger
 from langfuse import observe
+from langgraph.graph import END, StateGraph
+
+from src.state import AgentState
+
+from .vuln_map_executor import vuln_map_executor_node
+from .vuln_map_planner import vuln_map_planner_node
 
 MAX_STEPS = 40
+
 
 @observe(name="Vuln Map subgraph")
 def build_vuln_map_subgraph():
@@ -29,11 +31,12 @@ def build_vuln_map_subgraph():
         {
             "finish": END,
             "executor": "executor",
-        }
+        },
     )
 
     graph.add_edge("executor", "planner")
 
     return graph.compile()
+
 
 vuln_map_subgraph = build_vuln_map_subgraph()

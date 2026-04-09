@@ -1,16 +1,18 @@
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
+from langfuse import observe
+
+from src.logger import logger
 from src.state import AgentState, CveState
 from src.subgraphs.cve.cve_subgraph import cve_subgraph
-from src.logger import logger
-from langfuse import observe
+
 
 @observe(name="CVE Worker")
 async def cve_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
     old_cve = state.get("cve", {})
     out = await cve_subgraph.ainvoke(state, config)
     logger.info(f"[CVE_WORKER_NODE] Output: {out}")
-    
+
     cve_out: CveState = out.get("cve", {})
     cve_out["finished"] = bool(cve_out.get("finished", False))
     steps = cve_out.get("step_count", 0)
@@ -24,9 +26,7 @@ async def cve_worker_node(state: AgentState, config: RunnableConfig) -> AgentSta
     return {
         "user_target": state.get("user_target"),
         "next_step": "supervisor",
-        "cve": {
-            **old_cve,
-            **cve_out
-        },
-        "messages": state["messages"] + [HumanMessage(content=f"[SOURCE: CVE]\n{executive_summary}")]
+        "cve": {**old_cve, **cve_out},
+        "messages": state["messages"]
+        + [HumanMessage(content=f"[SOURCE: CVE]\n{executive_summary}")],
     }

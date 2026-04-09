@@ -1,14 +1,19 @@
 from __future__ import annotations
+
+import asyncio
 from typing import Any, Dict, Optional
+
+import httpx
+from langfuse import observe
+
 from src.logger import logger
 from src.utils.utils import get_engine_url
-from langfuse import observe
-import httpx, asyncio
+
 
 def _normalize_payload(
     next_tool: Optional[str] = None,
     args: Optional[Dict[str, Any]] = None,
-    plan: Optional[Dict[str, Any]] = None
+    plan: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Normalize different call styles into the Recon Engine request schema:
@@ -54,6 +59,7 @@ def _normalize_payload(
         "options": options,
     }
 
+
 @observe(name="Recon executor client")
 async def call_recon_engine(
     *,
@@ -65,7 +71,7 @@ async def call_recon_engine(
     retries: int = 2,
     backoff_base: float = 0.5,
 ) -> Dict[str, Any]:
-    
+
     payload = _normalize_payload(next_tool=next_tool, args=args, plan=plan)
     base = base_url or get_engine_url()
     url = f"{base.rstrip('/')}/recon"
@@ -77,14 +83,14 @@ async def call_recon_engine(
         while attempt <= retries:
             try:
                 resp = await client.post(
-                    url, 
-                    json=payload, 
-                    headers={"Content-Type": "application/json"}
+                    url, json=payload, headers={"Content-Type": "application/json"}
                 )
                 try:
                     data = resp.json()
                     if data:
-                        logger.info(f"[RECON_EXECUTOR_CLIENT] Response: {data['next_tool'], data['target'], data['options']}")
+                        logger.info(
+                            f"[RECON_EXECUTOR_CLIENT] Response: {data['next_tool'], data['target'], data['options']}"
+                        )
                 except Exception:
                     data = {}
 
@@ -103,16 +109,22 @@ async def call_recon_engine(
                         "status_code": resp.status_code,
                         "request": payload,
                         "response": data,
-                        "error": (data.get("detail") if isinstance(data, dict) and "detail" in data
-                                else f"HTTP {resp.status_code}"),
+                        "error": (
+                            data.get("detail")
+                            if isinstance(data, dict) and "detail" in data
+                            else f"HTTP {resp.status_code}"
+                        ),
                     }
 
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPError) as e:
                 last_exc = e
                 if attempt == retries:
                     break
-                sleep_s = backoff_base * (2 ** attempt)
-                logger.warning(f"[RECON_EXECUTOR_CLIENT] Error: {str(e)}. Retrying recon engine in {sleep_s}s... (Attempt {attempt+1}/{retries})", exc_info=True)
+                sleep_s = backoff_base * (2**attempt)
+                logger.warning(
+                    f"[RECON_EXECUTOR_CLIENT] Error: {str(e)}. Retrying recon engine in {sleep_s}s... (Attempt {attempt + 1}/{retries})",
+                    exc_info=True,
+                )
                 await asyncio.sleep(sleep_s)
                 attempt += 1
 

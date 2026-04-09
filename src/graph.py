@@ -1,24 +1,26 @@
-from langgraph.graph import StateGraph, END
-from src.state import AgentState
-from src.agents.supervisor import supervisor_node
-from src.agents.recon_worker import recon_worker_node
+from langgraph.graph import END, StateGraph
+
 from src.agents.cve_worker import cve_worker_node
-from src.agents.vuln_map_worker import vuln_map_worker_node
 from src.agents.exploit_worker import exploit_worker_node
+from src.agents.recon_worker import recon_worker_node
 from src.agents.report_worker import report_worker_node
+from src.agents.supervisor import supervisor_node
+from src.agents.vuln_map_worker import vuln_map_worker_node
+from src.state import AgentState
+
 
 def compile_workflow(checkpointer):
     workflow = StateGraph(AgentState)
-    
+
     workflow.add_node("supervisor", supervisor_node)
     workflow.add_node("recon", recon_worker_node)
     workflow.add_node("cve", cve_worker_node)
     workflow.add_node("vuln_map", vuln_map_worker_node)
     workflow.add_node("exploit", exploit_worker_node)
     workflow.add_node("report", report_worker_node)
-    
+
     workflow.set_entry_point("supervisor")
-    
+
     workflow.add_conditional_edges(
         "supervisor",
         lambda x: x["next_step"],
@@ -28,14 +30,17 @@ def compile_workflow(checkpointer):
             "vuln_map": "vuln_map",
             "exploit": "exploit",
             "report": "report",
-            "finish": END
-        }
+            "finish": END,
+        },
     )
-    
+
     workflow.add_edge("recon", "supervisor")
     workflow.add_edge("cve", "supervisor")
     workflow.add_edge("vuln_map", "supervisor")
     workflow.add_edge("exploit", "supervisor")
     workflow.add_edge("report", "supervisor")
-    
-    return workflow.compile(checkpointer=checkpointer, interrupt_before=["recon", "cve", "vuln_map", "exploit"])
+
+    return workflow.compile(
+        checkpointer=checkpointer,
+        interrupt_before=["recon", "cve", "vuln_map", "exploit"],
+    )

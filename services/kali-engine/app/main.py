@@ -1,11 +1,19 @@
+import base64
+import ipaddress
+import json
+import logging
+import os
+import re
+import subprocess
+from logging.handlers import RotatingFileHandler
+from typing import Any, Dict, Optional
+
+import requests
+from executors.bind_shell import TriggerBindShellExecutor
+from executors.http_rce_single_request import HttpRceSingleRequestExecutor
+from executors.reverse_shell import TriggerReverseShellExecutor
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, Any, Dict
-from logging.handlers import RotatingFileHandler
-from executors.bind_shell import TriggerBindShellExecutor
-from executors.reverse_shell import TriggerReverseShellExecutor
-from executors.http_rce_single_request import HttpRceSingleRequestExecutor
-import json, logging, subprocess, ipaddress, requests, os, re, base64
 
 app = FastAPI(title="Execution Engine", version="1.0.0")
 
@@ -26,50 +34,65 @@ if not os.path.exists(LOG_DIR):
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     handlers=[
-        RotatingFileHandler(f"{LOG_DIR}/kali_engine.log", maxBytes=5*1024*1024, backupCount=3),
-        logging.StreamHandler()
-    ]
+        RotatingFileHandler(
+            f"{LOG_DIR}/kali_engine.log", maxBytes=5 * 1024 * 1024, backupCount=3
+        ),
+        logging.StreamHandler(),
+    ],
 )
 
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 logger = logging.getLogger("kali-engine")
 
+
 class ReconRequest(BaseModel):
     next_tool: str = Field(..., description="nmap | dig")
     target: str = Field(..., description="Lab IP")
     options: list[str] = Field(default=[])
 
+
 class CveLookupRequest(BaseModel):
     # Structured fingerprint fields (from recon port_map)
     product: str = Field(..., min_length=1, max_length=100, description="e.g., OpenSSH")
-    version: Optional[str] = Field(default=None, max_length=200, description="e.g., 8.9p1 Ubuntu 3ubuntu0.13")
+    version: Optional[str] = Field(
+        default=None, max_length=200, description="e.g., 8.9p1 Ubuntu 3ubuntu0.13"
+    )
     service: Optional[str] = Field(default=None, max_length=50, description="e.g., ssh")
-    vendor: Optional[str] = Field(default=None, max_length=100, description="e.g., Canonical")
-    ostype: Optional[str] = Field(default=None, max_length=50, description="e.g., Linux")
-    extrainfo: Optional[str] = Field(default=None, max_length=200, description="e.g., Ubuntu Linux; protocol 2.0")
+    vendor: Optional[str] = Field(
+        default=None, max_length=100, description="e.g., Canonical"
+    )
+    ostype: Optional[str] = Field(
+        default=None, max_length=50, description="e.g., Linux"
+    )
+    extrainfo: Optional[str] = Field(
+        default=None, max_length=200, description="e.g., Ubuntu Linux; protocol 2.0"
+    )
     port: Optional[int] = Field(default=None, ge=1, le=65535)
 
     # NVD query tuning
     resultsPerPage: int = Field(default=50, ge=1, le=MAX_RESULTS_PER_PAGE)
     maxResults: int = Field(default=200, ge=1, le=MAX_TOTAL_RESULTS)
 
+
 class SearchsploitRequest(BaseModel):
     cve: Optional[str] = None
     product: Optional[str] = None
     version: Optional[str] = None
 
+
 class ExploitRequest(BaseModel):
     command: str
+
 
 def ensure_lab_target(target: str):
     try:
         # Accept both single IPs and CIDR networks
         if "/" in target:
             net = ipaddress.IPv4Network(target, strict=False)
-            
+
             if net.subnet_of(LAB_NETWORK):
                 return
         else:
@@ -81,11 +104,13 @@ def ensure_lab_target(target: str):
 
     raise HTTPException(400, "Target outside lab range")
 
+
 def ensure_nmap_options(options: list[str]):
     for opt in options:
         if opt not in ALLOWED_NMAP_FLAGS:
             # raise HTTPException(status_code=400, detail=f"Disallowed nmap option: {opt}")
-            x=1
+            x = 1
+
 
 def _nvd_headers() -> dict[str, str]:
     headers = {"Accept": "application/json"}
@@ -93,11 +118,13 @@ def _nvd_headers() -> dict[str, str]:
         headers["apiKey"] = NVD_API_KEY
     return headers
 
+
 def _normalize_text(s: str) -> str:
     s = s.strip()
     _whitespace = re.compile(r"\s+")
     s = _whitespace.sub(" ", s)
     return s
+
 
 def _build_keyword_search(req: CveLookupRequest) -> str:
     """
@@ -121,6 +148,7 @@ def _build_keyword_search(req: CveLookupRequest) -> str:
     query = " ".join(parts)
     return _normalize_text(query)
 
+
 def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
     """
     Extract a compact summary from NVD response.
@@ -132,7 +160,7 @@ def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
     last_modified = cve.get("lastModified")
 
     desc = None
-    for d in (cve.get("descriptions", [])):
+    for d in cve.get("descriptions", []):
         if d.get("lang") == "en":
             desc = d.get("value")
             break
@@ -165,6 +193,7 @@ def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
         "cvss_v2_base": base_score(cvss_v2),
     }
 
+
 @app.post("/recon")
 def run(req: ReconRequest):
     if req.next_tool not in ALLOWED_TOOLS:
@@ -183,10 +212,13 @@ def run(req: ReconRequest):
             *req.options,
             "-n",
             "-Pn",
-            "--max-retries", "1",
-            "--host-timeout", "300s",
+            "--max-retries",
+            "1",
+            "--host-timeout",
+            "300s",
             "-T4",
-            "-oX", "-",
+            "-oX",
+            "-",
             "--exclude",
             exclude_ips,
             req.target,
@@ -211,6 +243,7 @@ def run(req: ReconRequest):
         "returncode": result.returncode,
     }
 
+
 @app.post("/cve_lookup")
 def cve_lookup(req: CveLookupRequest):
     """
@@ -233,18 +266,22 @@ def cve_lookup(req: CveLookupRequest):
         }
 
         try:
-            logger.info(f"CVE_LOOKUP: {NVD_BASE_URL}, {_nvd_headers()}, {params}, {HTTP_TIMEOUT}")
+            logger.info(
+                f"CVE_LOOKUP: {NVD_BASE_URL}, {_nvd_headers()}, {params}, {HTTP_TIMEOUT}"
+            )
             r = requests.get(
                 NVD_BASE_URL,
                 headers=_nvd_headers(),
                 params=params,
-                timeout=HTTP_TIMEOUT
+                timeout=HTTP_TIMEOUT,
             )
         except requests.RequestException as e:
             raise HTTPException(status_code=502, detail=f"NVD request failed: {e}")
 
         if r.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"NVD returned {r.status_code}: {r.text[:300]}")
+            raise HTTPException(
+                status_code=502, detail=f"NVD returned {r.status_code}: {r.text[:300]}"
+            )
 
         data = r.json()
         vulns = data.get("vulnerabilities", [])
@@ -274,8 +311,9 @@ def cve_lookup(req: CveLookupRequest):
         },
         "count": len(items),
         "items": items,
-        "note": "Summarized CVE records from NVD CVE API v2.0 (keyword search + pagination)."
+        "note": "Summarized CVE records from NVD CVE API v2.0 (keyword search + pagination).",
     }
+
 
 @app.post("/recon_mock")
 def run_mock(req: ReconRequest):
@@ -288,25 +326,26 @@ def run_mock(req: ReconRequest):
         "returncode": 0,
     }
 
+
 @app.get("/read_exploit_file")
 def read_exploit(path: str):
     safe_base = "/opt/exploitdb"
     absolute_path = os.path.abspath(path)
-    
+
     if not absolute_path.startswith(safe_base):
-        raise HTTPException(status_code=403, detail="Access denied: Path is outside exploitdb")
-    
+        raise HTTPException(
+            status_code=403, detail="Access denied: Path is outside exploitdb"
+        )
+
     if not os.path.exists(absolute_path):
         raise HTTPException(status_code=404, detail="Exploit file not found")
 
     try:
         with open(absolute_path, "r", encoding="utf-8", errors="ignore") as f:
-            return {
-                "path": absolute_path,
-                "content": f.read()
-            }
+            return {"path": absolute_path, "content": f.read()}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+
 
 @app.post("/search_exploit")
 def search_exploit(request: SearchsploitRequest):
@@ -314,9 +353,9 @@ def search_exploit(request: SearchsploitRequest):
     Searches on ExploitDB using CVEs or Product + version.
     """
     logger.info(f"SEARCHSPLOIT request: {request}")
-    
+
     all_results = []
-    
+
     if request.cve:
         cmd_cve = f"searchsploit --json --cve {request.cve}"
         logger.info(f"SEARCHSPLOIT command: {cmd_cve}")
@@ -333,38 +372,31 @@ def search_exploit(request: SearchsploitRequest):
             all_results.extend(json.loads(res_txt.stdout).get("RESULTS_EXPLOIT", []))
 
     unique_exploits = {exp["EDB-ID"]: exp for exp in all_results}.values()
-    sorted_exploits = sorted(list(unique_exploits), 
-                             key=lambda x: (x.get("Verified") == "1"), 
-                             reverse=True)
+    sorted_exploits = sorted(
+        list(unique_exploits), key=lambda x: x.get("Verified") == "1", reverse=True
+    )
 
     return {
-            "query": {
-                "cve": request.cve,
-                "product": request.product,
-                "version": request.version
-            },
-            "count": len(sorted_exploits),
-            "results": sorted_exploits,
-            "status": "success"
-        }
+        "query": {
+            "cve": request.cve,
+            "product": request.product,
+            "version": request.version,
+        },
+        "count": len(sorted_exploits),
+        "results": sorted_exploits,
+        "status": "success",
+    }
+
 
 @app.post("/exploit")
 def exploit(request: ExploitRequest):
     cmd = request.command
     if not cmd:
-        return {
-            "status": "TECHNICAL_ERROR",
-            "details": "No command received"
-        }
+        return {"status": "TECHNICAL_ERROR", "details": "No command received"}
 
     logger.info(f"[MANUAL] Command: {cmd}")
 
-    result = subprocess.run(
-        cmd,
-        shell=True,
-        capture_output=True,
-        text=True
-    )
+    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
 
     if result.returncode != 0:
         return {
@@ -373,8 +405,8 @@ def exploit(request: ExploitRequest):
             "artifact": {
                 "stdout": result.stdout,
                 "stderr": result.stderr,
-                "returncode": result.returncode
-            }
+                "returncode": result.returncode,
+            },
         }
 
     return {
@@ -383,12 +415,12 @@ def exploit(request: ExploitRequest):
         "artifact": {
             "stdout": result.stdout,
             "stderr": result.stderr,
-            "returncode": result.returncode
-        }
+            "returncode": result.returncode,
+        },
     }
 
-@app.post("/execute/trigger_bind_shell")
 
+@app.post("/execute/trigger_bind_shell")
 def execute_trigger_bind_shell(payload: Dict[str, Any]):
     try:
         params = payload["parameters"]
@@ -398,18 +430,16 @@ def execute_trigger_bind_shell(payload: Dict[str, Any]):
             trigger_port=params["trigger_port"],
             dialogue=params["dialogue"],
             close_channel=params["close_channel"],
-            bind_port=params["bind_port"]
+            bind_port=params["bind_port"],
         )
 
         return executor.execute()
 
     except Exception as e:
         logger.exception("[EXECUTOR] trigger_bind_shell failed")
-        return {
-            "status": "EXECUTOR_ERROR",
-            "details": str(e)
-        }
-    
+        return {"status": "EXECUTOR_ERROR", "details": str(e)}
+
+
 @app.post("/execute/trigger_reverse_shell")
 def execute_trigger_reverse_shell(payload: Dict[str, Any]):
     try:
@@ -419,18 +449,16 @@ def execute_trigger_reverse_shell(payload: Dict[str, Any]):
             trigger_protocol=params["trigger_protocol"],
             trigger_port=params["trigger_port"],
             dialogue=params["dialogue"],
-            callback_port=params["callback_port"]
+            callback_port=params["callback_port"],
         )
 
         return executor.execute()
 
     except Exception as e:
         logger.exception("[EXECUTOR] trigger_reverse_shell failed")
-        return {
-            "status": "EXECUTOR_ERROR",
-            "details": str(e)
-        }
-    
+        return {"status": "EXECUTOR_ERROR", "details": str(e)}
+
+
 @app.post("/execute/http_rce_single_request")
 def execute_http_rce_single_request(payload: Dict[str, Any]):
     try:
@@ -449,20 +477,18 @@ def execute_http_rce_single_request(payload: Dict[str, Any]):
 
     except Exception as e:
         logger.exception("[EXECUTOR] http_rce_single_request failed")
-        return {
-            "status": "EXECUTOR_ERROR",
-            "details": str(e)
-        }
+        return {"status": "EXECUTOR_ERROR", "details": str(e)}
+
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok"
-    }
+    return {"status": "ok"}
+
 
 class FileUpdateRequest(BaseModel):
     path: str
     content_b64: str
+
 
 @app.patch("/update_exploit")
 def update_exploit(req: FileUpdateRequest):
