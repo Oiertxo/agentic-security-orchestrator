@@ -1,16 +1,20 @@
+from typing import Any, Mapping
+
+
 def _clean(value):
-    if value is None or str(value).strip().lower() in ['none', 'null', '']:
+    if value is None or str(value).strip().lower() in ["none", "null", ""]:
         return "-"
     return str(value).replace(",", " ").strip()
+
 
 def port_map_to_toon(port_map: dict) -> str:
     if not port_map:
         return "services(0): -"
-    
+
     services_count = sum(len(ports) for ports in port_map.values())
     header = f"services({services_count}): ip, port, name, product, version"
     rows = []
-    
+
     for ip, ports in port_map.items():
         for port, info in ports.items():
             rows.append(
@@ -19,8 +23,9 @@ def port_map_to_toon(port_map: dict) -> str:
                 f"{_clean(info.get('product'))}, "
                 f"{_clean(info.get('version'))}"
             )
-    
+
     return f"{header}\n" + "\n".join(rows)
+
 
 def vulnerabilities_to_toon(vulnerabilities: dict) -> str:
     """
@@ -29,21 +34,22 @@ def vulnerabilities_to_toon(vulnerabilities: dict) -> str:
     """
     if not vulnerabilities:
         return "vulnerabilities(0): -"
-    
+
     all_rows = []
     for target, cve_list in vulnerabilities.items():
         for cve in cve_list:
-            cve_id = cve.get('cve_id', '-')
-            score = cve.get('calculated_max_cvss', '-')
-            severity = cve.get('severity_label', '-').upper()
-            
+            cve_id = cve.get("cve_id", "-")
+            score = cve.get("calculated_max_cvss", "-")
+            severity = cve.get("severity_label", "-").upper()
+
             all_rows.append(f"{target}, {cve_id}, {score}, {severity}")
-    
+
     if not all_rows:
         return "vulnerabilities(0): -"
 
     header = f"vulnerabilities({len(all_rows)}): target, cve_id, score, severity"
     return f"{header}\n" + "\n".join(all_rows)
+
 
 def found_exploits_to_toon(found_exploits: dict) -> str:
     """
@@ -52,39 +58,41 @@ def found_exploits_to_toon(found_exploits: dict) -> str:
     """
     if not found_exploits:
         return "exploits(0): -"
-        
+
     all_rows = []
     for target, exploits in found_exploits.items():
         for exp in exploits:
-            eid = exp.get('edb_id', '-')
-            title = exp.get('title', '-')
-            local_path = exp.get('local_path', '-')
+            eid = exp.get("edb_id", "-")
+            title = exp.get("title", "-")
+            local_path = exp.get("local_path", "-")
             clean_title = str(title).replace(",", " ").strip()
             all_rows.append(f"{target}, {eid}, {clean_title}, {local_path}")
-            
+
     if not all_rows:
         return "exploits(0): -"
 
     header = f"exploits({len(all_rows)}): target, edb_id, title, local_path"
     return f"{header}\n" + "\n".join(all_rows)
 
+
 def pending_services_for_search_to_toon(pending_data: dict) -> str:
     if not pending_data:
         return "pending_search(0): -"
-    
+
     total_count = sum(len(services) for services in pending_data.values())
-    
+
     header = f"pending_search({total_count}): ip, port, product, version"
     rows = []
-    
+
     for ip, services in pending_data.items():
         for svc in services:
             port = svc.get("port", "-")
             prod = _clean(svc.get("product"))
             ver = _clean(svc.get("version"))
             rows.append(f"{ip}, {port}, {prod}, {ver}")
-            
+
     return f"{header}\n" + "\n".join(rows)
+
 
 def get_minimal_toon_context(values: dict) -> str:
     """
@@ -95,7 +103,7 @@ def get_minimal_toon_context(values: dict) -> str:
     port_map = values.get("recon", {}).get("port_map", {})
     vulnerabilities = values.get("cve", {}).get("vulnerabilities", {})
     found_exploits = values.get("vuln_map", {}).get("found_exploits", {})
-    
+
     toon_report = [
         f"TARGET_RANGE: {target}",
         "---",
@@ -103,42 +111,60 @@ def get_minimal_toon_context(values: dict) -> str:
         "---",
         vulnerabilities_to_toon(vulnerabilities),
         "---",
-        found_exploits_to_toon(found_exploits)
+        found_exploits_to_toon(found_exploits),
     ]
-    
+
     return "\n".join(toon_report)
+
 
 def thoughts_to_toon(thought_log) -> str:
     if not thought_log:
         return ""
 
     formatted_steps = []
-    
+
     noise_patterns = [
-        "Welcome to Ubuntu", " * ", "Documentation:", "Management:", 
-        "Support:", "Last login:", "Pseudo-terminal", "Warning: Permanently added",
-        "mesg: ttyname failed"
+        "Welcome to Ubuntu",
+        " * ",
+        "Documentation:",
+        "Management:",
+        "Support:",
+        "Last login:",
+        "Pseudo-terminal",
+        "Warning: Permanently added",
+        "mesg: ttyname failed",
     ]
-    
-    tech_errors = ["TabError", "SyntaxError", "No such file", "IndentationError", "can't open file"]
+
+    tech_errors = [
+        "TabError",
+        "SyntaxError",
+        "No such file",
+        "IndentationError",
+        "can't open file",
+    ]
 
     for entry in thought_log:
         step = entry.get("step", "?")
         action = entry.get("action", "Unknown")
         raw_result = entry.get("result", "No result recorded")
-        
+
         if any(err in str(raw_result) for err in tech_errors):
-            clean_result = "FAILED: Technical error (Script incompatible or environment issue)."
-        
+            clean_result = (
+                "FAILED: Technical error (Script incompatible or environment issue)."
+            )
+
         else:
             lines = str(raw_result).splitlines()
             filtered_lines = [
-                line.strip() for line in lines 
+                line.strip()
+                for line in lines
                 if not any(noise in line for noise in noise_patterns) and line.strip()
             ]
-            
-            clean_result = "\n".join(filtered_lines) if filtered_lines else str(raw_result)[:100]
-            
+
+            clean_result = (
+                "\n".join(filtered_lines) if filtered_lines else str(raw_result)[:100]
+            )
+
             if len(clean_result) > 200:
                 clean_result = clean_result[:200] + " [...]"
 
@@ -146,3 +172,58 @@ def thoughts_to_toon(thought_log) -> str:
         formatted_steps.append(step_str)
 
     return "\n".join(formatted_steps)
+
+
+def exploit_results_to_toon(exploit_state: Mapping[str, Any]) -> str:
+    """
+    Converts successful exploitation results into a compact TOON table.
+    Focuses ONLY on confirmed compromise evidence.
+    """
+
+    if not exploit_state or not exploit_state.get("finished"):
+        return "exploitation(0): -"
+
+    results = exploit_state.get("results", [])
+    compromised = exploit_state.get("compromised_targets", {})
+
+    if not results or not compromised:
+        return "exploitation(0): -"
+
+    rows = []
+
+    for result in results:
+        if result.get("status") != "SUCCESS":
+            continue
+
+        target = result.get("target", "-")
+        port = result.get("port", "-")
+
+        raw_tool = result.get("tool", "-")
+        exploit_id = (
+            raw_tool.replace("exploit-", "EDB-")
+            if raw_tool.startswith("exploit-")
+            else raw_tool
+        )
+
+        artifact = result.get("artifact", {})
+        probe = artifact.get("probe", {})
+
+        privilege = _clean(probe.get("whoami", "unknown"))
+
+        # Proof: prefer id(), fallback to whoami / hostname
+        proof_parts = []
+        if probe.get("id"):
+            proof_parts.append(f"id={probe['id']}")
+        if probe.get("hostname"):
+            proof_parts.append(f"host={probe['hostname']}")
+
+        proof = " | ".join(proof_parts) if proof_parts else "-"
+
+        rows.append(f"{target}, {port}, {exploit_id}, {privilege}, {proof}")
+
+    if not rows:
+        return "exploitation(0): -"
+
+    header = f"exploitation({len(rows)}): target, port, exploit_id, privilege, proof"
+
+    return f"{header}\n" + "\n".join(rows)

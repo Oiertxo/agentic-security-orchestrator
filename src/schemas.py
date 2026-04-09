@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import BaseModel
 
 class SupervisorSchema(BaseModel):
@@ -26,7 +26,10 @@ class PlannerSchema(BaseModel):
     thought: Optional[ThoughtSchema] = None
 
 class ExploitSchema(BaseModel):
-    command: str
+    mode: Literal["executor", "manual"]
+    executor: str
+    parameters: Optional[Dict[str, Any]] = None
+    tool_command: Optional[str] = None
     reasoning: str
 
 class ExploitOutputClassifierSchema(BaseModel):

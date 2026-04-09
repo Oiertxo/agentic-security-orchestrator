@@ -39,6 +39,7 @@ services:
       dockerfile: services/kali-engine/Dockerfile
     container_name: kali-tools-container
     volumes:
+      - ./services/kali-engine/app:/opt/kali/app
       - ./data/logs/kali:/app/logs
     cap_add:
       - NET_RAW

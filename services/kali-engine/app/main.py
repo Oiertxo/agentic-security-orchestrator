@@ -1,7 +1,10 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 from logging.handlers import RotatingFileHandler
+from executors.bind_shell import TriggerBindShellExecutor
+from executors.reverse_shell import TriggerReverseShellExecutor
+from executors.http_rce_single_request import HttpRceSingleRequestExecutor
 import json, logging, subprocess, ipaddress, requests, os, re, base64
 
 app = FastAPI(title="Execution Engine", version="1.0.0")
@@ -349,22 +352,107 @@ def search_exploit(request: SearchsploitRequest):
 def exploit(request: ExploitRequest):
     cmd = request.command
     if not cmd:
-        return {"status": "error", "message": "No command received"}
-    
-    logger.info(f"[EXPLOIT] Command: {cmd}")
+        return {
+            "status": "TECHNICAL_ERROR",
+            "details": "No command received"
+        }
 
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    logger.info(f"[MANUAL] Command: {cmd}")
 
-    logger.info(f"[EXPLOIT RESULT]: {result}")
+    result = subprocess.run(
+        cmd,
+        shell=True,
+        capture_output=True,
+        text=True
+    )
 
-    status = "ok" if result.returncode == 0 else "error"
-    
+    if result.returncode != 0:
+        return {
+            "status": "FAILURE",
+            "details": result.stderr.strip() or result.stdout.strip(),
+            "artifact": {
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode
+            }
+        }
+
     return {
-        "command": cmd,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-        "status": status
+        "status": "SUCCESS",
+        "details": result.stdout.strip() or "Command executed successfully",
+        "artifact": {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
     }
+
+@app.post("/execute/trigger_bind_shell")
+
+def execute_trigger_bind_shell(payload: Dict[str, Any]):
+    try:
+        params = payload["parameters"]
+        executor = TriggerBindShellExecutor(
+            host=params["host"],
+            trigger_protocol=params["trigger_protocol"],
+            trigger_port=params["trigger_port"],
+            dialogue=params["dialogue"],
+            close_channel=params["close_channel"],
+            bind_port=params["bind_port"]
+        )
+
+        return executor.execute()
+
+    except Exception as e:
+        logger.exception("[EXECUTOR] trigger_bind_shell failed")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": str(e)
+        }
+    
+@app.post("/execute/trigger_reverse_shell")
+def execute_trigger_reverse_shell(payload: Dict[str, Any]):
+    try:
+        params = payload["parameters"]
+        executor = TriggerReverseShellExecutor(
+            host=params["host"],
+            trigger_protocol=params["trigger_protocol"],
+            trigger_port=params["trigger_port"],
+            dialogue=params["dialogue"],
+            callback_port=params["callback_port"]
+        )
+
+        return executor.execute()
+
+    except Exception as e:
+        logger.exception("[EXECUTOR] trigger_reverse_shell failed")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": str(e)
+        }
+    
+@app.post("/execute/http_rce_single_request")
+def execute_http_rce_single_request(payload: Dict[str, Any]):
+    try:
+        params = payload["parameters"]
+        executor = HttpRceSingleRequestExecutor(
+            host=params["host"],
+            scheme=params["scheme"],
+            port=params["port"],
+            method=params["method"],
+            path=params["path"],
+            query=params["query"],
+            success_regex=params["success_regex"],
+        )
+
+        return executor.execute()
+
+    except Exception as e:
+        logger.exception("[EXECUTOR] http_rce_single_request failed")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": str(e)
+        }
 
 @app.get("/health")
 def health():
@@ -375,7 +463,6 @@ def health():
 class FileUpdateRequest(BaseModel):
     path: str
     content_b64: str
-
 
 @app.patch("/update_exploit")
 def update_exploit(req: FileUpdateRequest):

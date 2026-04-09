@@ -56,7 +56,6 @@ RUN pip install --no-cache-dir --break-system-packages \
     --trusted-host files.pythonhosted.org \
     -r /opt/kali/requirements.txt
 
-COPY services/kali-engine/app /opt/kali/app
 WORKDIR /opt/kali/app
 
 COPY services/kali-engine/entrypoint.sh /usr/local/bin/entrypoint.sh
