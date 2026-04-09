@@ -1,11 +1,13 @@
-from langgraph.graph import StateGraph, END
-from src.state import AgentState
-from .recon_planner import recon_planner_node
-from .recon_executor import recon_executor_node
-from src.logger import logger
 from langfuse import observe
+from langgraph.graph import END, StateGraph
+
+from src.state import AgentState
+
+from .recon_executor import recon_executor_node
+from .recon_planner import recon_planner_node
 
 MAX_STEPS = 40
+
 
 @observe(name="Recon subgraph")
 def build_recon_subgraph():
@@ -29,11 +31,12 @@ def build_recon_subgraph():
         {
             "finish": END,
             "executor": "executor",
-        }
+        },
     )
 
     graph.add_edge("executor", "planner")
 
     return graph.compile()
+
 
 recon_subgraph = build_recon_subgraph()

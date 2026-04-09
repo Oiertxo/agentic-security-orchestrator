@@ -7,8 +7,8 @@ This project provides a controlled environment where AI agents autonomously perf
 *   **Reconnaissance**
 *   **Scanning**
 *   **Service fingerprinting**
-*   **CVE assotiation**
-*   **(Soon) Exploitation workflows**
+*   **CVE association**
+*   **(Active development) Exploitation workflows**
 *   **Final Report Generation**
 
 All operations occur inside a fully isolated Docker network using a hardened Kali engine.
@@ -20,7 +20,10 @@ All operations occur inside a fully isolated Docker network using a hardened Kal
 The system uses **LangGraph subgraphs** to coordinate separate reasoning loops for:
 
 *   **Reconnaissance** — network scanning, host discovery, port mapping, service versioning.
+*   **CVE lookups** — CVE lookups in NVD v2.0.
+*   **Vulnerability mapping** — CVE to exploit mapping via ExploitDB.
 *   **(WIP) Exploitation** — safe, controlled follow-up actions based on recon findings.
+*   **Report** — Final report summarizing the whole execution and the results found.
 
 A central **Supervisor Agent** coordinates the workflow:
 
@@ -159,27 +162,27 @@ Isolated inside `attack_net`:
 
 ### **4. LangGraph Subgraphs**
 
-*   **Recon Subgraph (fully implemented)**
+*   **Recon Subgraph**
     *   Planner → Executor loop
     *   Step-by-step scanning
     *   Tool selection enforced by structured schema
     *   Handles full cycle:
         *   CIDR → host discovery → port map → version scans → summary
 
-*   **CVE Subgraph (fully implemented)**
+*   **CVE Subgraph**
     *   Planner → Executor loop
     *   Step-by-step searches
     *   CVE lookup based on Recon findings (services and versions of each target)
 
-*   **Vuln Map Subgraph (fully implemented)**
+*   **Vuln Map Subgraph**
     *   Planner → Executor loop
     *   Step-by-step searches
     *   Vulnerability to Exploit mapping based on Recon findings and found CVEs (services and versions of each target)
 
 *   **Exploit Subgraph (actively working)**
-    *   Will mirror Recon’s architecture
+    *   Planner → Executor loop
     *   Planner selects exploit vectors
-    *   Executor performs safe actions
+    *   Executor performs exploits selecting available tools
     *   Produces structured findings
 
 ***
@@ -192,38 +195,6 @@ Isolated inside `attack_net`:
 * Planner-driven version scanning
 * Full reasoning loop until no pending hosts
 * Clean recon summary output to user
-
-***
-
-## 🔥 Exploit Subgraph (Next Major Milestone)
-
-This is the immediate roadmap.
-
-### **Phase 1 — Safe Exploit Subgraph**
-
-*   `exploit_executor` with sandbox-safe vectors:
-    *   SSH banner probe
-    *   HTTP header probe
-    *   CVE identification (no payload execution)
-    *   “Would‑exploit” simulation mode
-
-### **Phase 2 — Controlled Lab Exploits**
-
-Enable real exploit modules in fully isolated lab setups:
-
-*   SSH auth check (with provided lab creds)
-*   CVE proof‑of‑concept modules
-*   Port/service‑specific checks
-*   Impact assessment output
-
-### **Phase 3 — Full AI‑Driven Attack Chains**
-
-*   Multi-step exploitation
-*   Privilege escalation chains
-*   Post‑exploitation recon
-*   Lateral movement inside controlled environments
-
-All behind opt‑in environment flags.
 
 ***
 
@@ -257,6 +228,7 @@ All behind opt‑in environment flags.
 *   Graph refactoring to modularize nodes
 *   Knowledge persistence integration
 *   Human-in-the-Loop integration
+*   Automatic mitigation suggestions
 
 ### 🚧 In Progress
 
@@ -271,7 +243,6 @@ All behind opt‑in environment flags.
 *   Safe-mode vs aggressive-mode flags
 *   Interactive chain-of-thought debugging
 *   Attack graph generation
-*   Automatic mitigation suggestions
 
 ***
 

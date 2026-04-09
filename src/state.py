@@ -1,6 +1,8 @@
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional, TypedDict
+
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
+
 
 class ServiceMeta(TypedDict, total=False):
     name: Optional[str]
@@ -9,7 +11,9 @@ class ServiceMeta(TypedDict, total=False):
     extrainfo: Optional[str]
     ostype: Optional[str]
 
+
 PortMap = Dict[str, Dict[int, ServiceMeta]]
+
 
 class FoundExploit(BaseModel):
     edb_id: str = Field(..., alias="EDB-ID")
@@ -22,9 +26,11 @@ class FoundExploit(BaseModel):
     target_port: int
     associated_cve: Optional[str] = None
 
+
 class PlannerOutput(TypedDict, total=False):
     next_tool: Optional[str]
     arguments: Dict[str, Any]
+
 
 class ReconState(TypedDict, total=False):
     planner: PlannerOutput
@@ -35,6 +41,7 @@ class ReconState(TypedDict, total=False):
     finished: bool
     step_count: int
 
+
 class CveState(TypedDict, total=False):
     planner: PlannerOutput
     results: List[dict]
@@ -43,6 +50,7 @@ class CveState(TypedDict, total=False):
     finished: bool
     step_count: int
     vulnerabilities: Dict[str, List[Dict[str, Any]]]
+
 
 class VulnMapState(TypedDict, total=False):
     planner: PlannerOutput
@@ -53,16 +61,22 @@ class VulnMapState(TypedDict, total=False):
     pending_services_for_search: Dict[str, List[Dict[str, Any]]]
     found_exploits: Dict[str, List[Dict[str, Any]]]
 
+
 class ExploitState(TypedDict, total=False):
     planner: PlannerOutput
     results: List[dict]
     finished: bool
     step_count: int
+    thought_log: List[Dict[str, Any]]
+    compromised_targets: Dict[str, Dict]
+    fix_attempts: int
+
 
 class AgentStateRequired(TypedDict):
     user_target: str
     messages: list[BaseMessage]
     next_step: str
+
 
 class AgentStateOptional(TypedDict, total=False):
     recon: ReconState
@@ -71,6 +85,8 @@ class AgentStateOptional(TypedDict, total=False):
     exploit: ExploitState
     report_finished: bool
 
+
 class AgentState(AgentStateOptional, AgentStateRequired):
     """Single global state with optional namespaced branches."""
+
     pass

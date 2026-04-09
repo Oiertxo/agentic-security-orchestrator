@@ -1,10 +1,13 @@
-from langgraph.graph import StateGraph, END
-from src.state import AgentState
-from .cve_planner import cve_planner_node
-from .cve_executor import cve_executor_node
 from langfuse import observe
+from langgraph.graph import END, StateGraph
+
+from src.state import AgentState
+
+from .cve_executor import cve_executor_node
+from .cve_planner import cve_planner_node
 
 MAX_STEPS = 40
+
 
 @observe(name="CV subgraph")
 def build_cve_subgraph():
@@ -28,11 +31,12 @@ def build_cve_subgraph():
         {
             "finish": END,
             "executor": "executor",
-        }
+        },
     )
 
     graph.add_edge("executor", "planner")
 
     return graph.compile()
+
 
 cve_subgraph = build_cve_subgraph()

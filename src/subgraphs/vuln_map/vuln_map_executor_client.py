@@ -1,13 +1,15 @@
-import time, httpx, asyncio
-from src.utils.utils import get_engine_url
-from typing import Optional, Dict, Any
-from src.logger import logger
+import asyncio
+from typing import Any, Dict, Optional
+
+import httpx
 from langfuse import observe
 
+from src.logger import logger
+from src.utils.utils import get_engine_url
+
+
 def _normalize_search_exploit_payload(
-    *, 
-    args: Optional[Dict[str, Any]] = None, 
-    plan: Optional[Dict[str, Any]] = None
+    *, args: Optional[Dict[str, Any]] = None, plan: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """
     Extracts search terms from LLM arguments or the current plan.
@@ -15,7 +17,7 @@ def _normalize_search_exploit_payload(
     """
     args = args or {}
     plan = plan or {}
-    llm_args = plan.get("arguments", {})    
+    llm_args = plan.get("arguments", {})
     combined = {**plan, **llm_args, **args}
 
     return {
@@ -23,6 +25,7 @@ def _normalize_search_exploit_payload(
         "product": combined.get("product"),
         "version": combined.get("version"),
     }
+
 
 @observe(name="Vuln Map executor client")
 async def call_search_exploit(
@@ -46,13 +49,11 @@ async def call_search_exploit(
 
     last_exc: Optional[Exception] = None
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
+    async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
         for attempt in range(retries + 1):
             try:
                 resp = await client.post(
-                    url, 
-                    json=payload, 
-                    headers={"Content-Type": "application/json"}
+                    url, json=payload, headers={"Content-Type": "application/json"}
                 )
                 try:
                     data = resp.json()
@@ -62,7 +63,9 @@ async def call_search_exploit(
                 if isinstance(data, dict):
                     count = data.get("count", 0)
                     query_type = "CVE" if payload.get("cve") else "Product"
-                    logger.info(f"[VULN_MAP_EXECUTOR_CLIENT] Searchsploit ok={resp.status_code<400} type={query_type} results={count}")
+                    logger.info(
+                        f"[VULN_MAP_EXECUTOR_CLIENT] Searchsploit ok={resp.status_code < 400} type={query_type} results={count}"
+                    )
 
                 if resp.status_code < 400:
                     return {
@@ -78,16 +81,21 @@ async def call_search_exploit(
                     "status_code": resp.status_code,
                     "request": payload,
                     "response": data,
-                    "error": (data.get("detail") if isinstance(data, dict) and "detail" in data
-                            else f"HTTP {resp.status_code}"),
+                    "error": (
+                        data.get("detail")
+                        if isinstance(data, dict) and "detail" in data
+                        else f"HTTP {resp.status_code}"
+                    ),
                 }
 
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPError) as e:
                 last_exc = e
                 if attempt == retries:
                     break
-                sleep_s = backoff_base * (2 ** attempt)
-                logger.warning(f"[VULN_MAP_EXECUTOR_CLIENT] Retrying vulnerability mapping in {sleep_s}s... (Attempt {attempt+1}/{retries})")
+                sleep_s = backoff_base * (2**attempt)
+                logger.warning(
+                    f"[VULN_MAP_EXECUTOR_CLIENT] Retrying vulnerability mapping in {sleep_s}s... (Attempt {attempt + 1}/{retries})"
+                )
                 await asyncio.sleep(sleep_s)
                 attempt += 1
 

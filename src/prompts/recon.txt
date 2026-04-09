@@ -15,8 +15,8 @@ You can plan the next step by responding in the following format. Output ONLY va
   "finished": true | false,
   "next_tool": "nmap" | "dig" | null,
   "arguments": {{
-       "target": "string or null",
-       "options": ["list", "of", "strings"]
+      "target": "string or null",
+      "options": ["list", "of", "strings"]
   }},
 }}
 

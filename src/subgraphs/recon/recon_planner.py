@@ -1,28 +1,33 @@
+import json
+from typing import Any, Dict
+
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
-from src.state import AgentState, ReconState, PlannerOutput
-from src.model import get_model
-from src.utils.utils import load_prompt
-from src.utils.toon_formatter import port_map_to_toon
-from src.schemas import PlannerSchema
-from src.logger import logger
-from typing import Dict, Any
 from langfuse import observe
-import json
+
+from src.logger import logger
+from src.model import get_model
+from src.schemas import PlannerSchema
+from src.state import AgentState, PlannerOutput, ReconState
+from src.utils.toon_formatter import port_map_to_toon
+from src.utils.utils import load_prompt
+
 
 @observe(name="Recon planner")
 async def recon_planner_node(state: AgentState, config: RunnableConfig) -> AgentState:
     llm = get_model()
     system_prompt = load_prompt("recon.txt")
-    
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", system_prompt),
-        ("system", "Target requested by the user: {user_target}"),
-        ("system", "Port map (host and their open ports): {port_map}"),
-        ("system", "Already version-scanned hosts: {scanned_hosts}"),
-        ("system", "Pending hosts for -sV: {pending_hosts}"),
-    ])
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", system_prompt),
+            ("system", "Target requested by the user: {user_target}"),
+            ("system", "Port map (host and their open ports): {port_map}"),
+            ("system", "Already version-scanned hosts: {scanned_hosts}"),
+            ("system", "Pending hosts for -sV: {pending_hosts}"),
+        ]
+    )
 
     planner_input: Dict[str, Any] = {
         "user_target": state.get("user_target"),
@@ -32,8 +37,11 @@ async def recon_planner_node(state: AgentState, config: RunnableConfig) -> Agent
     }
 
     logger.info(f"[RECON_PLANNER] Calling LLM: {planner_input}")
-    
-    chain = (prompt | llm.with_structured_output(PlannerSchema, method="json_mode", strict=True)).with_types(
+
+    chain = (
+        prompt
+        | llm.with_structured_output(PlannerSchema, method="json_mode", strict=True)
+    ).with_types(
         input_type=Dict[str, Any],
         output_type=PlannerSchema,
     )
@@ -41,16 +49,16 @@ async def recon_planner_node(state: AgentState, config: RunnableConfig) -> Agent
     raw_result = await chain.ainvoke(planner_input, config=config)
     result = PlannerSchema.model_validate(raw_result)
     data = result.model_dump(mode="json")
-    
+
     logger.info(f"[RECON_PLANNER] Response from LLM: {data}")
-    
+
     if not data or (not data.get("finished") and not data.get("next_tool")):
-        logger.error(f"[RECON_PLANNER] Planner failed to reason. Forcing termination")
+        logger.error("[RECON_PLANNER] Planner failed to reason. Forcing termination")
         data = {
             "finished": True,
             "next_tool": None,
             "arguments": {},
-            "reason": "Forced finish: LLM returned empty or invalid plan after null results."
+            "reason": "Forced finish: LLM returned empty or invalid plan after null results.",
         }
     is_finished = result.finished
     new_planner: PlannerOutput = {
@@ -67,5 +75,5 @@ async def recon_planner_node(state: AgentState, config: RunnableConfig) -> Agent
         **state,
         "recon": new_recon,
         "messages": state.get("messages") + [AIMessage(content=json.dumps(data))],
-        "next_step": "supervisor" if is_finished else "executor"
+        "next_step": "supervisor" if is_finished else "executor",
     }

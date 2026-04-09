@@ -1,13 +1,22 @@
+import json
+from typing import Any, Dict
+from xml.etree import ElementTree
+
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
-from src.state import AgentState, ReconState, PortMap, ServiceMeta
-from src.subgraphs.recon.recon_executor_client import call_recon_engine
-from src.utils.utils import parse_as_json, derive_pending_hosts, merge_port_map, target_is_network, was_version_scan
-from src.logger import logger
-from xml.etree import ElementTree
-from typing import Dict, Any
 from langfuse import observe
-import json
+
+from src.logger import logger
+from src.state import AgentState, PortMap, ReconState, ServiceMeta
+from src.subgraphs.recon.recon_executor_client import call_recon_engine
+from src.utils.utils import (
+    derive_pending_hosts,
+    merge_port_map,
+    parse_as_json,
+    target_is_network,
+    was_version_scan,
+)
+
 
 @observe(name="Recon executor")
 async def recon_executor_node(state: AgentState, config: RunnableConfig) -> AgentState:
@@ -29,7 +38,9 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
                 "pending_hosts": recon_state.get("pending_hosts", []),
                 "finished": False,
             },
-            "messages": [HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(result)}")],
+            "messages": [
+                HumanMessage(content=f"[SOURCE: recon_engine]\n{json.dumps(result)}")
+            ],
         }
 
     engine_result = await call_recon_engine(plan=plan)
@@ -53,17 +64,23 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
             summary = {
                 "ok": False,
                 "error": "Executor returned no stdout",
-                "response": response
+                "response": response,
             }
         else:
             parsed = parse_nmap_xml(xml_str)
             summary = parsed["summary"]
-            
-            new_port_map = merge_port_map(recon_state.get("port_map", {}), parsed["port_map"])
+
+            new_port_map = merge_port_map(
+                recon_state.get("port_map", {}), parsed["port_map"]
+            )
             new_scanned = list(recon_state.get("scanned_hosts", []))
             if was_version_scan(plan):
                 target = (plan.get("arguments", {})).get("target")
-                if target and not target_is_network(target) and target not in new_scanned:
+                if (
+                    target
+                    and not target_is_network(target)
+                    and target not in new_scanned
+                ):
                     new_scanned.append(target)
 
     new_pending = derive_pending_hosts(new_port_map, new_scanned)
@@ -78,11 +95,8 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
         "pending_hosts": new_pending,
     }
 
-    return {
-        **state,
-        "recon": updated_recon,
-        "next_step": "planner"
-    }
+    return {**state, "recon": updated_recon, "next_step": "planner"}
+
 
 def parse_nmap_xml(xml_str: str) -> Dict[str, Any]:
     try:
@@ -127,9 +141,15 @@ def parse_nmap_xml(xml_str: str) -> Dict[str, Any]:
             service_el = port.find("service")
             meta: ServiceMeta = {
                 "name": service_el.get("name") if service_el is not None else None,
-                "product": service_el.get("product") if service_el is not None else None,
-                "version": service_el.get("version") if service_el is not None else None,
-                "extrainfo": service_el.get("extrainfo") if service_el is not None else None,
+                "product": service_el.get("product")
+                if service_el is not None
+                else None,
+                "version": service_el.get("version")
+                if service_el is not None
+                else None,
+                "extrainfo": service_el.get("extrainfo")
+                if service_el is not None
+                else None,
                 "ostype": service_el.get("ostype") if service_el is not None else None,
             }
 
