@@ -5,82 +5,6 @@ x-langfuse-depends-on: &langfuse-depends-on
   clickhouse: { condition: service_healthy }
 
 services:
-  orchestrator:
-    build:
-      context: .
-      dockerfile: services/orchestrator/Dockerfile
-    container_name: orchestrator_container
-    ports:
-      - "127.0.0.1:8000:8000"
-    volumes:
-      - ./src:/app/src
-      - ./data/logs:/data/logs
-      - ./data/reports:/data/reports
-      - ./data/exploits:/app/data/exploits
-      - ./data/database:/app/data/database
-    depends_on:
-      langfuse-web:
-        condition: service_healthy
-      kali-engine:
-        condition: service_healthy
-    environment:
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
-      - MODEL_NAME=${MODEL_NAME}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    cap_drop:
-      - NET_RAW
-    networks:
-      - mgmt_net
-
-  kali-engine:
-    build:
-      context: .
-      dockerfile: services/kali-engine/Dockerfile
-    container_name: kali-tools-container
-    volumes:
-      - ./services/kali-engine/app:/opt/kali/app
-      - ./data/logs/kali:/app/logs
-    cap_add:
-      - NET_RAW
-      - NET_ADMIN
-    environment:
-      - NVD_API_KEY=${NVD_API_KEY}
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5000"]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    networks:
-      mgmt_net:
-      attack_net:
-        ipv4_address: 10.255.255.2
-
-  ###########
-  # Targets #
-  ###########
-  # vuln-target:
-  #   build:
-  #     context: .
-  #     dockerfile: services/targets/Dockerfile
-  #   container_name: vuln-target-ssh
-  #   expose:
-  #     - "22"
-  #   networks:
-  #     attack_net:
-  #       ipv4_address: 10.255.255.10
-
-  metasploitable:
-    image: tleemcjr/metasploitable2
-    container_name: target-metasploitable
-    tty: true
-    stdin_open: true
-    privileged: true 
-    networks:
-      attack_net:
-        ipv4_address: 10.255.255.20
-
   ############
   # Langfuse #
   ############  
@@ -259,22 +183,6 @@ services:
       - 127.0.0.1:5432:5432
     volumes:
       - langfuse_postgres_data:/var/lib/postgresql/data
-
-networks:
-  mgmt_net:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 10.255.254.0/24
-          gateway: 10.255.254.1
-
-  attack_net:
-    driver: bridge
-    internal: true
-    ipam:
-      config:
-        - subnet: 10.255.255.0/24
-          gateway: 10.255.255.1
 
 volumes:
   langfuse_postgres_data:
