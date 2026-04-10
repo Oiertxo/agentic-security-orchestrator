@@ -1,0 +1,21 @@
+services:
+  # vuln-target:
+  #   build:
+  #     context: .
+  #     dockerfile: services/targets/Dockerfile
+  #   container_name: vuln-target-ssh
+  #   expose:
+  #     - "22"
+  #   networks:
+  #     attack_net:
+  #       ipv4_address: 10.255.255.10
+
+  metasploitable:
+    image: tleemcjr/metasploitable2
+    container_name: target-metasploitable
+    tty: true
+    stdin_open: true
+    privileged: true
+    networks:
+      attack_net:
+        ipv4_address: 10.255.255.20

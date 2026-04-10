@@ -271,6 +271,10 @@ ollama pull qwen2.5:7b  # Or the specific model configured in your .env
 
 ```
 
+### 🧰 Optional Tooling
+
+For convenience, a **Makefile** is provided to simplify deployment and lifecycle management.
+
 3. **Service Status:** Ensure Ollama is running on the host. The orchestrator connects via `http://host.docker.internal:11434`.
 
 ### 📂 File System & Permissions
@@ -287,15 +291,102 @@ The orchestrator requires write permissions to persist intelligence data:
 
 ***
 
-## 🏁 Quickstart
+## ▶️ Deployment Modes
+
+The project supports multiple execution modes depending on your needs, from lightweight operation to full observability.
+
+### 🔹 Core Engine Only
+
+Command:
 
 ```bash
-docker compose up --build
+make core
 ```
 
-Now, send a Post type HTTP request with a JSON to http://localhost:8000/chat with the request. Example with the current target:
+Starts the minimal system required to operate the orchestrator:
 
-    {"query": "Please scan the network 10.255.255.0/24 for vulnerabilities"}
+*   **Orchestrator API**
+*   **Kali execution engine**
+
+No vulnerable targets and no monitoring stack are deployed.
+
+✅ Lowest resource usage  
+✅ Recommended for development and lightweight environments  
+✅ Suitable for machines with limited RAM / VRAM
+
+***
+
+### 🔹 Core + Vulnerable Targets
+
+Command:
+
+```bash
+make lab
+```
+
+Starts the core system **plus intentionally vulnerable targets** for attack simulation.
+
+Includes:
+
+*   Core services (`orchestrator`, `kali-engine`)
+*   Vulnerable containers (e.g. **Metasploitable2**) attached to the internal attack network
+
+✅ Enables end-to-end attack simulation  
+✅ Useful for testing recon, exploitation and reporting phases  
+✅ Still lightweight — no monitoring infrastructure
+
+***
+
+### 🔹 Core + Targets + Monitoring
+
+Command:
+
+```bash
+make full
+```
+
+Starts the **complete stack**, including **observability and monitoring**.
+
+Includes:
+
+*   Core services
+*   Vulnerable targets
+*   **Langfuse monitoring stack** (web, worker, database, queue, storage)
+
+✅ Full execution visibility and trace analysis  
+✅ Recommended for debugging, benchmarking and prompt tuning  
+⚠️ Higher resource consumption (RAM and storage)
+
+Monitoring components are **optional** and not required for normal operation.
+
+***
+
+## ⛔ Stopping and Cleanup
+
+```bash
+make down
+```
+
+Stops all running containers.
+
+```bash
+make clean
+```
+
+Stops and removes containers, networks and orphaned services.  
+Recommended when changing execution modes or network topology.
+
+### Controlling the execution
+
+Send an HTTP POST request to `http://localhost:8000/chat`. Example using the client provided:
+
+    python .\client.py "Please scan the network 10.255.255.0/24 for vulnerabilities" -f
+
+Or you can use the Swagger UI deployed in http://localhost:8000/docs, where there are more options to try.
+
+The system currently stops before each subgraph. You can ask questions to the model to analyze the current state, or you can continue the execution by sending "approve" to the model:
+
+    python .\client.py "approve"
 
 ***
 
