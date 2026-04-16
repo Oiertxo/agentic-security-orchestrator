@@ -2,7 +2,7 @@ import json
 import os
 import re
 from copy import deepcopy
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
@@ -250,3 +250,40 @@ def normalize_newlines_python(script: str) -> str:
     script = re.sub(r'(?<!b)"\\n', '"\n', script)
     script = re.sub(r"(?<!b)'\\n", "'\n", script)
     return script
+
+
+UPSTREAM_VERSION_RE: re.Pattern[str] = re.compile(
+    r"""
+    ^
+    (?P<version>
+        \d+(?:\.\d+)*          # 1.2.3
+        (?:[a-z]\d+)?          # 4.7p1 / 5.0.51a
+        (?:\s*-\s*[0-9X]+(?:\.[0-9X]+)*)?  # 3.X - 4.X
+    )
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
+
+
+def normalize_version(raw: Optional[str]) -> Optional[str]:
+    if raw is None:
+        return None
+
+    raw = raw.strip()
+    if raw == "" or raw.lower() in {"-", "unknown", "n/a"}:
+        return None
+
+    raw = re.split(
+        r"\s+(?:debian|ubuntu|redhat|centos|windows)\b",
+        raw,
+        flags=re.I,
+    )[0]
+
+    if raw is None:
+        return None
+
+    match = UPSTREAM_VERSION_RE.match(raw)
+    if not match:
+        return None
+
+    return match.group("version").strip()
