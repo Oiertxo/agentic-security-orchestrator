@@ -13,13 +13,13 @@ help:
 	@echo ""
 
 core:
-	docker compose -f compose.core.yml up
+	docker compose -f compose.core.yml up --build
 
 lab:
-	docker compose -f compose.core.yml -f compose.targets.yml up
+	docker compose -f compose.core.yml -f compose.targets.yml up --build
 
 full:
-	docker compose $(COMPOSE_FILES) up
+	docker compose $(COMPOSE_FILES) up --build
 
 stop:
 	docker compose $(COMPOSE_FILES) stop
