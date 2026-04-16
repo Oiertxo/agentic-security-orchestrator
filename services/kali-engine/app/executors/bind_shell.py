@@ -11,16 +11,16 @@ class TriggerBindShellExecutor:
     def __init__(
         self,
         host: str,
-        trigger_protocol: str,
-        trigger_port: int,
+        service_protocol: str,
+        service_port: int,
         dialogue: List[Dict[str, Any]],
         close_channel: bool,
         bind_port: int,
         connect_timeout: float = 2.0,
     ):
         self.host = host
-        self.trigger_protocol = trigger_protocol
-        self.trigger_port = trigger_port
+        self.service_protocol = service_protocol
+        self.service_port = service_port
         self.dialogue = dialogue
         self.close_channel = close_channel
         self.bind_port = bind_port
@@ -37,11 +37,11 @@ class TriggerBindShellExecutor:
             logger.info(
                 "[EXECUTOR] trigger_bind_shell: connecting to %s:%s",
                 self.host,
-                self.trigger_port,
+                self.service_port,
             )
 
             # Open trigger channel
-            sock = self._tcp_connect(self.trigger_port)
+            sock = self._tcp_connect(self.service_port)
 
             # Execute dialogue
             for step in self.dialogue:

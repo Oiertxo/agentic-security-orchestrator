@@ -16,16 +16,16 @@ class TriggerReverseShellExecutor:
     def __init__(
         self,
         host: str,
-        trigger_protocol: str,
-        trigger_port: int,
+        service_protocol: str,
+        service_port: int,
         dialogue: List[Dict[str, Any]],
         callback_port: int,
         listen_timeout: float = 10.0,
         connect_timeout: float = 2.0,
     ):
         self.host = host
-        self.trigger_protocol = trigger_protocol
-        self.trigger_port = trigger_port
+        self.service_protocol = service_protocol
+        self.service_port = service_port
         self.dialogue = dialogue
         self.callback_port = callback_port
         self.listen_timeout = listen_timeout
@@ -57,11 +57,11 @@ class TriggerReverseShellExecutor:
             logger.info(
                 "[EXECUTOR] trigger_reverse_shell: connecting to trigger %s:%d",
                 self.host,
-                self.trigger_port,
+                self.service_port,
             )
 
             # Open trigger channel
-            sock = self._tcp_connect(self.trigger_port)
+            sock = self._tcp_connect(self.service_port)
 
             # Execute trigger dialogue
             for step in self.dialogue:

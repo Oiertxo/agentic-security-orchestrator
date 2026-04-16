@@ -426,8 +426,8 @@ def execute_trigger_bind_shell(payload: Dict[str, Any]):
         params = payload["parameters"]
         executor = TriggerBindShellExecutor(
             host=params["host"],
-            trigger_protocol=params["trigger_protocol"],
-            trigger_port=params["trigger_port"],
+            service_protocol=params["service_protocol"],
+            service_port=params["service_port"],
             dialogue=params["dialogue"],
             close_channel=params["close_channel"],
             bind_port=params["bind_port"],
@@ -446,8 +446,8 @@ def execute_trigger_reverse_shell(payload: Dict[str, Any]):
         params = payload["parameters"]
         executor = TriggerReverseShellExecutor(
             host=params["host"],
-            trigger_protocol=params["trigger_protocol"],
-            trigger_port=params["trigger_port"],
+            service_protocol=params["service_protocol"],
+            service_port=params["service_port"],
             dialogue=params["dialogue"],
             callback_port=params["callback_port"],
         )
