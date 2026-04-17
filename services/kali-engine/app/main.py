@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 
 import requests
 from executors.bind_shell import TriggerBindShellExecutor
+from executors.bruteforce import execute as bruteforce_execute
 from executors.http_rce_single_request import HttpRceSingleRequestExecutor
 from executors.reverse_shell import TriggerReverseShellExecutor
 from fastapi import FastAPI, HTTPException
@@ -156,15 +157,6 @@ def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
     """
     cve = (vuln or {}).get("cve", {})
     cve_id = cve.get("id")
-    published = cve.get("published")
-    last_modified = cve.get("lastModified")
-
-    desc = None
-    for d in cve.get("descriptions", []):
-        if d.get("lang") == "en":
-            desc = d.get("value")
-            break
-
     metrics = cve.get("metrics", {})
 
     def first_metric(metric_key: str) -> Optional[dict[str, Any]]:
@@ -478,6 +470,27 @@ def execute_http_rce_single_request(payload: Dict[str, Any]):
     except Exception as e:
         logger.exception("[EXECUTOR] http_rce_single_request failed")
         return {"status": "EXECUTOR_ERROR", "details": str(e)}
+
+
+@app.post("/execute/credential_bruteforce")
+def execute_credential_bruteforce(payload: Dict[str, Any]):
+    try:
+        params = payload.get("parameters")
+
+        if not params:
+            return {
+                "status": "EXECUTOR_ERROR",
+                "details": "Missing parameters for credential_bruteforce",
+            }
+
+        return bruteforce_execute(params)
+
+    except Exception as e:
+        logger.exception("[EXECUTOR] credential_bruteforce failed")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": str(e),
+        }
 
 
 @app.get("/health")

@@ -32,12 +32,25 @@ class PlannerOutput(TypedDict, total=False):
     arguments: Dict[str, Any]
 
 
+class WebForm(TypedDict):
+    method: Literal["GET", "POST"]
+    parameters: List[str]
+
+
+class WebNode(TypedDict, total=False):
+    type: Literal["directory", "file"]
+    content: Optional[str]
+    forms: List[WebForm]
+    children: Dict[str, "WebNode"]
+
+
 class ReconState(TypedDict, total=False):
     planner: PlannerOutput
     results: List[dict]
     port_map: PortMap
     scanned_hosts: list[str]
     pending_hosts: list[str]
+    web_intel: Dict[str, WebNode]
     finished: bool
     step_count: int
 
