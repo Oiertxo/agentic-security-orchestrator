@@ -72,7 +72,7 @@ class VulnMapState(TypedDict, total=False):
     step_count: int
     analyzed_services_for_search: Dict[str, List[int]]
     pending_services_for_search: Dict[str, List[Dict[str, Any]]]
-    found_exploits: Dict[str, List[Dict[str, Any]]]
+    found_exploits: Dict[str, Dict[str, List[Any]]]
 
 
 class AttackSurface(TypedDict):
@@ -111,6 +111,7 @@ class ExploitState(TypedDict, total=False):
 
     # Global results
     compromised_targets: Dict[str, Dict[str, Any]]
+    results: List[Dict]
 
 
 class AgentStateRequired(TypedDict):
