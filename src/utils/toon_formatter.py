@@ -55,21 +55,27 @@ def vulnerabilities_to_toon(vulnerabilities: dict) -> str:
 
 def found_exploits_to_toon(found_exploits: dict) -> str:
     """
-    Converts FoundExploit dicts into compact TOON table.
-    Assumes state is normalized as dictionaries via model_dump().
+    Converts found exploits and framework modules into a compact TOON table.
     """
+
     if not found_exploits:
         return "exploits[0]"
 
     rows = []
-    for target, exploits in found_exploits.items():
-        for exp in exploits:
+
+    for target, entry in found_exploits.items():
+        # --- ExploitDB exploits ---
+        for exp in entry.get("exploits", []):
             eid = exp.get("edb_id", "-")
             title = exp.get("title", "-")
             clean_title = str(title).replace(",", " ").strip()
-            rows.append(f"{target},{eid},{clean_title}")
+            rows.append(f"{target},exploitdb,{eid},{clean_title}")
 
-    header = f"exploits[{len(rows)}]:target,edb_id,title"
+        # --- Framework modules ---
+        for module in entry.get("framework_modules", []):
+            rows.append(f"{target},framework,{module},-")
+
+    header = f"exploits[{len(rows)}]:target,type,id_or_path,title"
     return f"{header}\n" + "\n".join(rows)
 
 
