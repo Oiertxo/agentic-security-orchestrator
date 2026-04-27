@@ -1,11 +1,13 @@
+import errno
 import logging
+import os
+import re
 import subprocess
-from typing import Any, Dict, List
+import tempfile
+from typing import Any, Dict
 
 logger = logging.getLogger("kali-engine.executor.bruteforce")
-
-
-SUPPORTED_SERVICES = {"ssh", "ftp", "telnet", "mysql"}
+HYDRA_RE = re.compile(r"login:\s*(?P<user>\S+)\s+password:\s*(?P<pass>\S+)")
 
 
 def execute(parameters: Dict[str, Any]) -> Dict[str, Any]:
@@ -28,12 +30,9 @@ def execute(parameters: Dict[str, Any]) -> Dict[str, Any]:
             "artifact": None,
         }
 
-    if service not in SUPPORTED_SERVICES:
-        return {
-            "status": "TECHNICAL_ERROR",
-            "details": f"Service '{service}' not supported by Hydra",
-            "artifact": None,
-        }
+    outfile = tempfile.NamedTemporaryFile(
+        prefix="hydra_", suffix=".txt", delete=False
+    ).name
 
     cmd = [
         "hydra",
@@ -43,6 +42,8 @@ def execute(parameters: Dict[str, Any]) -> Dict[str, Any]:
         password_wordlist,
         "-s",
         str(port),
+        "-o",
+        outfile,
     ]
 
     if stop_on_success:
@@ -51,14 +52,55 @@ def execute(parameters: Dict[str, Any]) -> Dict[str, Any]:
     cmd.extend([f"{service}://{host}"])
 
     logger.info(f"[BRUTEFORCE_EXECUTOR] Running: {' '.join(cmd)}")
-
+    pty_output = ""
     try:
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
+        if service == "telnet":
+            env = os.environ.copy()
+            env.setdefault("TERM", "xterm")
+
+            master, slave = os.openpty()  # type: ignore[attr-defined]
+
+            proc = subprocess.Popen(
+                cmd,
+                stdin=slave,
+                stdout=slave,
+                stderr=slave,
+                env=env,
+                text=False,
+            )
+
+            os.close(slave)
+
+            try:
+                while proc.poll() is None:
+                    try:
+                        data = os.read(master, 1024)
+                        if not data:
+                            break
+
+                        chunk = data.decode(errors="ignore")
+                        pty_output += chunk
+                        logger.debug(chunk.rstrip())
+
+                        if "login:" in chunk and "password:" in chunk:
+                            proc.terminate()
+                            break
+
+                    except OSError as e:
+                        if e.errno == errno.EIO:
+                            break
+                        else:
+                            raise
+            finally:
+                os.close(master)
+
+            proc.wait(timeout=600)
+
+        else:
+            proc = subprocess.run(
+                cmd,
+                timeout=600,
+            )
     except subprocess.TimeoutExpired:
         return {
             "status": "TECHNICAL_ERROR",
@@ -72,72 +114,50 @@ def execute(parameters: Dict[str, Any]) -> Dict[str, Any]:
             "artifact": None,
         }
 
-    stdout = proc.stdout or ""
-    stderr = proc.stderr or ""
-    combined_output = (stdout + "\n" + stderr).strip()
+    credentials = []
+    raw_output = pty_output
 
-    if proc.returncode not in (0, 255):
-        return {
-            "status": "TECHNICAL_ERROR",
-            "details": stderr.strip() or "Hydra execution failed",
-            "artifact": {
-                "raw_output": combined_output,
-            },
-        }
+    if os.path.exists(outfile):
+        with open(outfile, "r", errors="ignore") as f:
+            file_output = f.read()
 
-    credentials = parse_hydra_output(combined_output)
+        raw_output = raw_output + "\n" + file_output
 
-    if credentials:
+        for line in raw_output.splitlines():
+            m = HYDRA_RE.search(line)
+            if m:
+                credentials.append(
+                    {
+                        "username": m.group("user"),
+                        "password": m.group("pass"),
+                    }
+                )
+
+        os.unlink(outfile)
+
+    if proc.returncode == 0 and credentials:
         return {
             "status": "SUCCESS",
             "details": "Valid credentials found",
             "artifact": {
                 "credentials": credentials,
-                "raw_output": combined_output,
+                "raw_output": raw_output,
             },
         }
 
-    if "kex error" in combined_output or "no match for method" in combined_output:
+    if proc.returncode == 255:
         return {
-            "status": "TECHNICAL_ERROR",
-            "details": "SSH legacy crypto incompatible with Hydra",
+            "status": "FAILURE",
+            "details": "No valid credentials found",
             "artifact": {
-                "raw_output": combined_output,
+                "raw_output": raw_output,
             },
         }
 
     return {
-        "status": "FAILURE",
-        "details": "No valid credentials found",
+        "status": "TECHNICAL_ERROR",
+        "details": f"Hydra exited with code {proc.returncode}",
         "artifact": {
-            "raw_output": combined_output,
+            "raw_output": raw_output,
         },
     }
-
-
-def parse_hydra_output(output: str) -> List[Dict[str, str]]:
-    """
-    Parses Hydra output to extract credentials.
-    """
-
-    credentials = []
-
-    for line in output.splitlines():
-        # Example:
-        # [22][ssh] host: 10.0.0.1   login: root   password: toor
-        if "login:" in line and "password:" in line:
-            try:
-                parts = line.split()
-                login_idx = parts.index("login:") + 1
-                pass_idx = parts.index("password:") + 1
-
-                credentials.append(
-                    {
-                        "username": parts[login_idx],
-                        "password": parts[pass_idx],
-                    }
-                )
-            except Exception:
-                continue
-
-    return credentials

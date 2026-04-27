@@ -34,7 +34,23 @@ class TriggerReverseShellExecutor:
     def _open_listener(self) -> socket.socket:
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listener.settimeout(self.listen_timeout)
-        listener.bind(("", self.callback_port))
+
+        if self.callback_port is None:
+            # Dynamic port
+            listener.bind(("", 0))
+            self.callback_port = listener.getsockname()[1]
+            logger.info(
+                "[REVERSE_SHELL] Auto assigned callback_port: %d",
+                self.callback_port,
+            )
+        else:
+            if not isinstance(self.callback_port, int):
+                raise ValueError(f"Invalid callback_port: {self.callback_port!r}")
+            if not (1 <= self.callback_port <= 65535):
+                raise ValueError(f"callback_port out of range: {self.callback_port}")
+
+            listener.bind(("", self.callback_port))
+
         listener.listen(1)
         return listener
 
