@@ -24,6 +24,7 @@ async def cve_worker_node(state: AgentState, config: RunnableConfig) -> AgentSta
     cve_out.get("results", []).append({"final_result": executive_summary})
 
     return {
+        **state,
         "user_target": state.get("user_target"),
         "next_step": "supervisor",
         "cve": {**old_cve, **cve_out},

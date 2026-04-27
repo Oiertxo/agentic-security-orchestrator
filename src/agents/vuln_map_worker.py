@@ -29,6 +29,7 @@ async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> Age
     vuln_map_out.get("results", []).append({"final_result": executive_summary})
 
     return {
+        **state,
         "user_target": state.get("user_target"),
         "vuln_map": {**old_vuln_map, **vuln_map_out},
         "messages": state["messages"]

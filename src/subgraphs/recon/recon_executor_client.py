@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import httpx
 from langfuse import observe
@@ -60,22 +60,14 @@ def _normalize_payload(
     }
 
 
-@observe(name="Recon executor client")
-async def call_recon_engine(
+async def _post_with_retries(
     *,
-    next_tool: Optional[str] = None,
-    args: Optional[Dict[str, Any]] = None,
-    plan: Optional[Dict[str, Any]] = None,
-    base_url: Optional[str] = None,
+    url: str,
+    payload: Dict[str, Any],
     timeout: float = 600.0,
     retries: int = 2,
     backoff_base: float = 0.5,
 ) -> Dict[str, Any]:
-
-    payload = _normalize_payload(next_tool=next_tool, args=args, plan=plan)
-    base = base_url or get_engine_url()
-    url = f"{base.rstrip('/')}/recon"
-
     attempt = 0
     last_exc: Optional[Exception] = None
 
@@ -83,8 +75,11 @@ async def call_recon_engine(
         while attempt <= retries:
             try:
                 resp = await client.post(
-                    url, json=payload, headers={"Content-Type": "application/json"}
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
                 )
+
                 try:
                     data = resp.json()
                     if data:
@@ -102,27 +97,24 @@ async def call_recon_engine(
                         "response": data,
                         "error": None,
                     }
-                else:
-                    # Non-2xx response
-                    return {
-                        "ok": False,
-                        "status_code": resp.status_code,
-                        "request": payload,
-                        "response": data,
-                        "error": (
-                            data.get("detail")
-                            if isinstance(data, dict) and "detail" in data
-                            else f"HTTP {resp.status_code}"
-                        ),
-                    }
+
+                return {
+                    "ok": False,
+                    "status_code": resp.status_code,
+                    "request": payload,
+                    "response": data,
+                    "error": data.get("detail", f"HTTP {resp.status_code}"),
+                }
 
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPError) as e:
                 last_exc = e
                 if attempt == retries:
                     break
+
                 sleep_s = backoff_base * (2**attempt)
                 logger.warning(
-                    f"[RECON_EXECUTOR_CLIENT] Error: {str(e)}. Retrying recon engine in {sleep_s}s... (Attempt {attempt + 1}/{retries})",
+                    f"[RECON_EXECUTOR_CLIENT] Error: {e}. Retrying in {sleep_s}s "
+                    f"(attempt {attempt + 1}/{retries})",
                     exc_info=True,
                 )
                 await asyncio.sleep(sleep_s)
@@ -135,3 +127,115 @@ async def call_recon_engine(
         "response": None,
         "error": str(last_exc) if last_exc else "Unknown transport error",
     }
+
+
+@observe(name="Recon executor client")
+async def call_recon_engine(
+    *,
+    next_tool: Optional[str] = None,
+    args: Optional[Dict[str, Any]] = None,
+    plan: Optional[Dict[str, Any]] = None,
+    base_url: Optional[str] = None,
+    timeout: float = 600.0,
+    retries: int = 2,
+    backoff_base: float = 0.5,
+) -> Dict[str, Any]:
+
+    payload = _normalize_payload(next_tool=next_tool, args=args, plan=plan)
+    base = base_url or get_engine_url()
+    url = f"{base.rstrip('/')}/recon"
+
+    return await _post_with_retries(
+        url=url,
+        payload=payload,
+        timeout=timeout,
+        retries=retries,
+        backoff_base=backoff_base,
+    )
+
+
+@observe(name="Web recon - gobuster client")
+async def call_gobuster(
+    *,
+    base_url: str,
+    mode: Literal["dir", "dns", "vhost"] = "dir",
+    wordlist: str,
+    extensions: Optional[List[str]] = None,
+    status_codes: Optional[List[int]] = None,
+    threads: int = 20,
+    timeout: float = 600.0,
+) -> Dict[str, Any]:
+    """
+    Call Kali Engine gobuster executor.
+
+    Expected executor endpoint:
+        POST /web/gobuster
+    """
+
+    payload = {
+        "mode": mode,
+        "base_url": base_url,
+        "wordlist": wordlist,
+        "threads": threads,
+        "extensions": extensions or [],
+        "status_codes": status_codes or [200, 204, 301, 302, 307, 403],
+    }
+
+    url = f"{get_engine_url().rstrip('/')}/web/gobuster"
+
+    logger.info(
+        "[GOBUSTER_CLIENT] Launching gobuster",
+        extra={
+            "mode": mode,
+            "base_url": base_url,
+            "wordlist": wordlist,
+        },
+    )
+
+    return await _post_with_retries(
+        url=url,
+        payload=payload,
+        timeout=timeout,
+    )
+
+
+@observe(name="Web recon - curl client")
+async def call_curl(
+    *,
+    url: str,
+    method: Literal["GET", "POST"] = "GET",
+    headers: Optional[Dict[str, str]] = None,
+    data: Optional[str] = None,
+    follow_redirects: bool = True,
+    timeout: float = 600.0,
+) -> Dict[str, Any]:
+    """
+    Call Kali Engine curl executor.
+
+    Expected executor endpoint:
+        POST /web/curl
+    """
+
+    payload = {
+        "url": url,
+        "method": method,
+        "headers": headers or {},
+        "data": data,
+        "follow_redirects": follow_redirects,
+    }
+
+    endpoint = f"{get_engine_url().rstrip('/')}/web/curl"
+
+    logger.info(
+        "[WEB_RECON] Fetching URL with curl",
+        extra={
+            "url": url,
+            "method": method,
+        },
+    )
+
+    return await _post_with_retries(
+        url=endpoint,
+        payload=payload,
+        timeout=timeout,
+    )

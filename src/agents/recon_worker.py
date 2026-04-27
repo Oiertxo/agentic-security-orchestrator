@@ -22,6 +22,7 @@ async def recon_worker_node(state: AgentState, config: RunnableConfig) -> AgentS
     recon_out.get("results", []).append({"final_result": executive_summary})
 
     return {
+        **state,
         "user_target": state.get("user_target"),
         "next_step": "supervisor",
         "recon": {**old_recon, **recon_out},

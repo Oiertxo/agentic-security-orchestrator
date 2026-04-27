@@ -31,6 +31,15 @@ RUN apt-get update && \
     python3-dev \
     python3-full \
     python-is-python3 \
+    perl \
+    libnet-ssleay-perl \
+    libio-socket-ssl-perl \
+    libwww-perl \
+    libcrypt-ssleay-perl \
+    ruby \
+    ruby-dev \
+    rubygems \
+    bundler \
     libffi-dev \
     libssl-dev \
     wordlists \

@@ -18,22 +18,38 @@ from src.utils.utils import load_prompt
 async def recon_planner_node(state: AgentState, config: RunnableConfig) -> AgentState:
     llm = get_model()
     system_prompt = load_prompt("recon.txt")
+    recon_state = state.get("recon", {})
 
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
-            ("system", "Target requested by the user: {user_target}"),
-            ("system", "Port map (host and their open ports): {port_map}"),
-            ("system", "Already version-scanned hosts: {scanned_hosts}"),
-            ("system", "Pending hosts for -sV: {pending_hosts}"),
+            (
+                "system",
+                """CURRENT STATE:
+
+                User target:
+                {user_target}
+
+                Port map:
+                {port_map}
+
+                Already scanned hosts:
+                {scanned_hosts}
+
+                Pending hosts:
+                {pending_hosts}
+                """,
+            ),
         ]
     )
 
     planner_input: Dict[str, Any] = {
         "user_target": state.get("user_target"),
-        "port_map": port_map_to_toon((state.get("recon", {})).get("port_map", {})),
-        "scanned_hosts": (state.get("recon", {})).get("scanned_hosts", []),
-        "pending_hosts": (state.get("recon", {})).get("pending_hosts", []),
+        "port_map": port_map_to_toon(
+            recon_state.get("port_map", {}), recon_state.get("step_count", 0)
+        ),
+        "scanned_hosts": recon_state.get("scanned_hosts", []),
+        "pending_hosts": recon_state.get("pending_hosts", []),
     }
 
     logger.info(f"[RECON_PLANNER] Calling LLM: {planner_input}")

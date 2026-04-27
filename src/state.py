@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, TypedDict
+from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
@@ -32,12 +32,25 @@ class PlannerOutput(TypedDict, total=False):
     arguments: Dict[str, Any]
 
 
+class WebForm(TypedDict):
+    method: Literal["GET", "POST"]
+    parameters: List[str]
+
+
+class WebNode(TypedDict, total=False):
+    type: Literal["directory", "file"]
+    content: Optional[str]
+    forms: List[WebForm]
+    children: Dict[str, "WebNode"]
+
+
 class ReconState(TypedDict, total=False):
     planner: PlannerOutput
     results: List[dict]
     port_map: PortMap
     scanned_hosts: list[str]
     pending_hosts: list[str]
+    web_intel: Dict[str, WebNode]
     finished: bool
     step_count: int
 
@@ -59,17 +72,46 @@ class VulnMapState(TypedDict, total=False):
     step_count: int
     analyzed_services_for_search: Dict[str, List[int]]
     pending_services_for_search: Dict[str, List[Dict[str, Any]]]
-    found_exploits: Dict[str, List[Dict[str, Any]]]
+    found_exploits: Dict[str, Dict[str, List[Any]]]
+
+
+class AttackSurface(TypedDict):
+    # Target info
+    service: str
+    product: Optional[str]
+    version: Optional[str]
+    cves: List[str]
+    exploit_ids: List[str]
+
+    # Control
+    status: Literal["pending", "exploited", "aborted"]
+    attempts: int
+    max_attempts: int
+
+    # Results
+    last_error: Optional[str]
+    last_result: Optional[Dict[str, Any]]
+
+    # Memory
+    attempted_exploits: Dict[str, str]
 
 
 class ExploitState(TypedDict, total=False):
-    planner: PlannerOutput
-    results: List[dict]
+    # Control
     finished: bool
     step_count: int
-    thought_log: List[Dict[str, Any]]
-    compromised_targets: Dict[str, Dict]
-    fix_attempts: int
+
+    # Planner
+    planner: PlannerOutput
+
+    # Exploitation
+    pending_surfaces: Dict[str, AttackSurface]
+    exploited_surfaces: Dict[str, AttackSurface]
+    aborted_surfaces: Dict[str, AttackSurface]
+
+    # Global results
+    compromised_targets: Dict[str, Dict[str, Any]]
+    results: List[Dict]
 
 
 class AgentStateRequired(TypedDict):

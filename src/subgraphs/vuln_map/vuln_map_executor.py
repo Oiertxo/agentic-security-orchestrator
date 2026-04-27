@@ -6,7 +6,10 @@ from langfuse import observe
 
 from src.logger import logger
 from src.state import AgentState, FoundExploit, VulnMapState
-from src.subgraphs.vuln_map.vuln_map_executor_client import call_search_exploit
+from src.subgraphs.vuln_map.vuln_map_executor_client import (
+    call_search_exploit,
+    call_search_framework_modules,
+)
 from src.utils.utils import parse_as_json
 
 
@@ -17,7 +20,7 @@ async def vuln_map_executor_node(
     logger.info(f"[VULN_MAP_EXECUTOR] Received state: {state}")
     old_vuln_map = state.get("vuln_map", {})
     new_step = int(old_vuln_map.get("step_count", 0)) + 1
-    found_map = dict(old_vuln_map.get("found_exploits", {}))
+    found_map = {k: dict(v) for k, v in old_vuln_map.get("found_exploits", {}).items()}
     analyzed_services_for_search = old_vuln_map.get("analyzed_services_for_search", {})
     new_analyzed_services_for_search = {
         ip: list(ports) for ip, ports in analyzed_services_for_search.items()
@@ -59,6 +62,16 @@ async def vuln_map_executor_node(
         t_port = int(llm_args.get("port") or 0)
         t_cve = llm_args.get("cve")
 
+        framework_modules = []
+        if t_cve:
+            logger.info(
+                f"[VULN_MAP_EXECUTOR] Searching Metasploit modules for CVE {t_cve}"
+            )
+
+            fw_result = await call_search_framework_modules(cve=t_cve)
+            if fw_result.get("ok"):
+                framework_modules = fw_result.get("modules", [])
+
         new_found_exploits = []
         for exp in top_raw_exploits:
             try:
@@ -74,9 +87,11 @@ async def vuln_map_executor_node(
             except Exception as e:
                 logger.warning(f"Validation error: {e}")
 
+        # Update found exploits for service
         found_map = old_vuln_map.get("found_exploits", {})
         service_key = f"{target_ip}:{target_port}" if target_port else target_ip
-        existing_exploits = found_map.get(service_key, [])
+        found_map.setdefault(service_key, {"exploits": [], "framework_modules": []})
+        existing_exploits = found_map.get(service_key, {}).get("exploits", [])
         existing_ids = {
             e.get("edb_id") for e in existing_exploits if isinstance(e, dict)
         }
@@ -84,7 +99,14 @@ async def vuln_map_executor_node(
         new_to_add = [
             n for n in new_found_exploits if n.get("edb_id") not in existing_ids
         ]
-        found_map[service_key] = existing_exploits + new_to_add
+        found_map[service_key]["exploits"] = existing_exploits + new_to_add
+
+        # Update framework modules for service
+        found_map[service_key]["framework_modules"] = list(
+            dict.fromkeys(
+                found_map[service_key]["framework_modules"] + framework_modules
+            )
+        )
 
         new_analyzed_services_for_search.setdefault(target_ip, [])
         if target_port not in new_analyzed_services_for_search[target_ip]:
@@ -100,6 +122,7 @@ async def vuln_map_executor_node(
                 {"id": exp.get("edb_id"), "title": exp.get("title")}
                 for exp in new_found_exploits[:5]
             ],
+            "framework_modules": framework_modules,
         }
     else:
         summary = {

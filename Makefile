@@ -1,4 +1,5 @@
 .DEFAULT_GOAL := help
+COMPOSE_FILES = -f compose.core.yml -f compose.targets.yml -f compose.monitoring.yml
 
 help:
 	@echo ""
@@ -12,16 +13,19 @@ help:
 	@echo ""
 
 core:
-	docker compose -f compose.core.yml up
+	docker compose -f compose.core.yml up --build
 
 lab:
-	docker compose -f compose.core.yml -f compose.targets.yml up
+	docker compose -f compose.core.yml -f compose.targets.yml up --build
 
 full:
-	docker compose -f compose.core.yml -f compose.targets.yml -f compose.monitoring.yml up
+	docker compose $(COMPOSE_FILES) up --build
+
+stop:
+	docker compose $(COMPOSE_FILES) stop
 
 down:
-	docker compose down
+	docker compose $(COMPOSE_FILES) down
 
 clean:
-	docker compose down -v --remove-orphans
+	docker compose $(COMPOSE_FILES) down -v --remove-orphans

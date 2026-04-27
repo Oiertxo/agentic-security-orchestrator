@@ -1,6 +1,6 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SupervisorSchema(BaseModel):
@@ -31,20 +31,31 @@ class PlannerSchema(BaseModel):
     thought: Optional[ThoughtSchema] = None
 
 
+class ExploitPayloadStep(BaseModel):
+    action: Literal["send", "expect"] = Field(
+        ..., description="Type of interaction performed by the exploit"
+    )
+    data: str = Field(..., description="Literal payload data or expected pattern")
+
+
 class ExploitSchema(BaseModel):
-    mode: Literal["executor", "manual"]
-    executor: str
-    parameters: Optional[Dict[str, Any]] = None
-    tool_command: Optional[str] = None
-    reasoning: str
-
-
-class ExploitOutputClassifierSchema(BaseModel):
-    classification: str
-    reasoning: str
-
-
-class ExploitFixerSchema(BaseModel):
-    result: str
-    fixed_script: Optional[str] = None
-    reasoning: str
+    is_framework_module: bool = Field(
+        ..., description="True if this exploit is a Metasploit framework module"
+    )
+    exploit_behavior: Literal["bind_shell", "reverse_shell", "http_rce", "other"] = (
+        Field(..., description="High-level behavior of the exploit")
+    )
+    arguments: List[
+        Literal["RHOST", "RPORT", "LHOST", "LPORT", "BIND_PORT", "URL", "FILE", "CMD"]
+    ] = Field(
+        default_factory=list,
+        description="Conceptual parameters referenced by the exploit without fixed values",
+    )
+    hardcoded_values: Dict[str, int | str] = Field(
+        default_factory=dict,
+        description="Literal constant values embedded in the exploit (ports, paths, filenames, etc.)",
+    )
+    payloads: List[ExploitPayloadStep] = Field(
+        default_factory=list,
+        description="Ordered exploitation dialogue extracted from the exploit",
+    )

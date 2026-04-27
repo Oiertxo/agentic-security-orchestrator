@@ -80,3 +80,9 @@ FORMATTING RULES (MANDATORY)
 - No conversational prefix or suffix.
 - No disclaimers.
 - Bold all CVE IDs.
+
+SAFE RULE:
+
+If there is no meaningful information given, say so on each section with no information (e.g. No exploitation findings reported.).
+You can leave the tables empty as well if there is no provided information for them.
+Do not simulate and do not create findings to fill the gaps.

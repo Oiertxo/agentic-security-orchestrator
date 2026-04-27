@@ -26,11 +26,26 @@ async def report_worker_node(state: AgentState, config: RunnableConfig) -> Agent
     prompt = ChatPromptTemplate.from_messages(
         [
             ("system", system_prompt),
-            ("system", "Target requested by the user: {target}"),
-            ("system", "Port map (host and their open ports): {port_map}"),
-            ("system", "Vulnerabilities found: {vulnerabilities}"),
-            ("system", "Exploit scripts identified in database: {found_exploits}"),
-            ("system", "Exploit findings {exploitation}"),
+            (
+                "system",
+                """CURRENT STATE:
+
+                User target:
+                {target}
+
+                Port map (found hosts and their open ports):
+                {port_map}
+
+                Vulnerabilities found:
+                {vulnerabilities}
+
+                Exploit scripts identified in database:
+                {found_exploits}
+
+                Exploit findings:
+                {exploitation}
+                """,
+            ),
         ]
     )
 

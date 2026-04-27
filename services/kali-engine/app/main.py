@@ -1,32 +1,42 @@
 import base64
-import ipaddress
 import json
 import logging
 import os
-import re
+import shutil
 import subprocess
 from logging.handlers import RotatingFileHandler
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 import requests
 from executors.bind_shell import TriggerBindShellExecutor
+from executors.bruteforce import execute as bruteforce_execute
+from executors.framework_module import (
+    framework_module_execute,
+    framework_module_search_execute,
+)
 from executors.http_rce_single_request import HttpRceSingleRequestExecutor
 from executors.reverse_shell import TriggerReverseShellExecutor
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+
+from utils import (
+    ALLOWED_TOOLS,
+    HTTP_TIMEOUT,
+    MAX_TOTAL_RESULTS,
+    NVD_BASE_URL,
+    CveLookupRequest,
+    ExploitRequest,
+    FileUpdateRequest,
+    ReconRequest,
+    SearchsploitRequest,
+    _build_keyword_search,
+    _extract_cve_summary,
+    _nvd_headers,
+    build_msf_module_path,
+    ensure_lab_target,
+    ensure_nmap_options,
+)
 
 app = FastAPI(title="Execution Engine", version="1.0.0")
-
-ALLOWED_TOOLS = {"nmap", "dig"}
-ALLOWED_NMAP_FLAGS = {"-sS", "-sV"}
-LAB_NETWORK = ipaddress.IPv4Network("10.255.255.0/24")
-NVD_BASE_URL = "https://services.nvd.nist.gov/rest/json/cves/2.0"
-NVD_API_KEY = os.getenv("NVD_API_KEY")
-
-# Safety caps
-MAX_RESULTS_PER_PAGE = 200
-MAX_TOTAL_RESULTS = 400
-HTTP_TIMEOUT = 20
 
 LOG_DIR = "/app/logs"
 if not os.path.exists(LOG_DIR):
@@ -46,152 +56,6 @@ logging.basicConfig(
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 logger = logging.getLogger("kali-engine")
-
-
-class ReconRequest(BaseModel):
-    next_tool: str = Field(..., description="nmap | dig")
-    target: str = Field(..., description="Lab IP")
-    options: list[str] = Field(default=[])
-
-
-class CveLookupRequest(BaseModel):
-    # Structured fingerprint fields (from recon port_map)
-    product: str = Field(..., min_length=1, max_length=100, description="e.g., OpenSSH")
-    version: Optional[str] = Field(
-        default=None, max_length=200, description="e.g., 8.9p1 Ubuntu 3ubuntu0.13"
-    )
-    service: Optional[str] = Field(default=None, max_length=50, description="e.g., ssh")
-    vendor: Optional[str] = Field(
-        default=None, max_length=100, description="e.g., Canonical"
-    )
-    ostype: Optional[str] = Field(
-        default=None, max_length=50, description="e.g., Linux"
-    )
-    extrainfo: Optional[str] = Field(
-        default=None, max_length=200, description="e.g., Ubuntu Linux; protocol 2.0"
-    )
-    port: Optional[int] = Field(default=None, ge=1, le=65535)
-
-    # NVD query tuning
-    resultsPerPage: int = Field(default=50, ge=1, le=MAX_RESULTS_PER_PAGE)
-    maxResults: int = Field(default=200, ge=1, le=MAX_TOTAL_RESULTS)
-
-
-class SearchsploitRequest(BaseModel):
-    cve: Optional[str] = None
-    product: Optional[str] = None
-    version: Optional[str] = None
-
-
-class ExploitRequest(BaseModel):
-    command: str
-
-
-def ensure_lab_target(target: str):
-    try:
-        # Accept both single IPs and CIDR networks
-        if "/" in target:
-            net = ipaddress.IPv4Network(target, strict=False)
-
-            if net.subnet_of(LAB_NETWORK):
-                return
-        else:
-            ip = ipaddress.ip_address(target)
-            if ip in LAB_NETWORK:
-                return
-    except ValueError:
-        raise HTTPException(400, "Invalid IP or CIDR format")
-
-    raise HTTPException(400, "Target outside lab range")
-
-
-def ensure_nmap_options(options: list[str]):
-    for opt in options:
-        if opt not in ALLOWED_NMAP_FLAGS:
-            # raise HTTPException(status_code=400, detail=f"Disallowed nmap option: {opt}")
-            x = 1
-
-
-def _nvd_headers() -> dict[str, str]:
-    headers = {"Accept": "application/json"}
-    if NVD_API_KEY:
-        headers["apiKey"] = NVD_API_KEY
-    return headers
-
-
-def _normalize_text(s: str) -> str:
-    s = s.strip()
-    _whitespace = re.compile(r"\s+")
-    s = _whitespace.sub(" ", s)
-    return s
-
-
-def _build_keyword_search(req: CveLookupRequest) -> str:
-    """
-    Build a consistent keyword string.
-    We avoid commands or exploit guidance; this is only metadata search.
-    """
-    version_clean = ""
-    if req.version:
-        match = re.search(r"(\d+\.\d+)", req.version)
-        version_clean = match.group(1) if match else req.version
-
-    parts = []
-    if req.product:
-        parts.append(req.product)
-    if version_clean:
-        parts.append(version_clean)
-
-    if not parts and req.service:
-        parts.append(req.service)
-
-    query = " ".join(parts)
-    return _normalize_text(query)
-
-
-def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
-    """
-    Extract a compact summary from NVD response.
-    NVD v2.0 response includes 'vulnerabilities' array. [1](https://nvd.nist.gov/developers/vulnerabilities)
-    """
-    cve = (vuln or {}).get("cve", {})
-    cve_id = cve.get("id")
-    published = cve.get("published")
-    last_modified = cve.get("lastModified")
-
-    desc = None
-    for d in cve.get("descriptions", []):
-        if d.get("lang") == "en":
-            desc = d.get("value")
-            break
-
-    metrics = cve.get("metrics", {})
-
-    def first_metric(metric_key: str) -> Optional[dict[str, Any]]:
-        arr = metrics.get(metric_key)
-        if isinstance(arr, list) and arr:
-            return arr[0]
-        return None
-
-    def base_score(block: Optional[dict[str, Any]]) -> Optional[float]:
-        if not block:
-            return None
-        data = block.get("cvssData", {})
-        return data.get("baseScore")
-
-    cvss_v31 = first_metric("cvssMetricV31")
-    cvss_v30 = first_metric("cvssMetricV30")
-    cvss_v2 = first_metric("cvssMetricV2")
-
-    return {
-        "cve_id": cve_id,
-        # "published": published,
-        # "last_modified": last_modified,
-        # "description": desc,
-        "cvss_v31_base": base_score(cvss_v31),
-        "cvss_v30_base": base_score(cvss_v30),
-        "cvss_v2_base": base_score(cvss_v2),
-    }
 
 
 @app.post("/recon")
@@ -395,8 +259,8 @@ def exploit(request: ExploitRequest):
         return {"status": "TECHNICAL_ERROR", "details": "No command received"}
 
     logger.info(f"[MANUAL] Command: {cmd}")
-
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    logger.info(f"[MANUAL] Result: {result}")
 
     if result.returncode != 0:
         return {
@@ -426,8 +290,8 @@ def execute_trigger_bind_shell(payload: Dict[str, Any]):
         params = payload["parameters"]
         executor = TriggerBindShellExecutor(
             host=params["host"],
-            trigger_protocol=params["trigger_protocol"],
-            trigger_port=params["trigger_port"],
+            service_protocol=params["service_protocol"],
+            service_port=params["service_port"],
             dialogue=params["dialogue"],
             close_channel=params["close_channel"],
             bind_port=params["bind_port"],
@@ -443,11 +307,12 @@ def execute_trigger_bind_shell(payload: Dict[str, Any]):
 @app.post("/execute/trigger_reverse_shell")
 def execute_trigger_reverse_shell(payload: Dict[str, Any]):
     try:
+        logger.info(f"[REVERSE_SHELL] Payload: {payload}")
         params = payload["parameters"]
         executor = TriggerReverseShellExecutor(
             host=params["host"],
-            trigger_protocol=params["trigger_protocol"],
-            trigger_port=params["trigger_port"],
+            service_protocol=params["service_protocol"],
+            service_port=params["service_port"],
             dialogue=params["dialogue"],
             callback_port=params["callback_port"],
         )
@@ -462,6 +327,7 @@ def execute_trigger_reverse_shell(payload: Dict[str, Any]):
 @app.post("/execute/http_rce_single_request")
 def execute_http_rce_single_request(payload: Dict[str, Any]):
     try:
+        logger.info(f"[HTTP_RCE_SINGLE] Payload: {payload}")
         params = payload["parameters"]
         executor = HttpRceSingleRequestExecutor(
             host=params["host"],
@@ -480,14 +346,121 @@ def execute_http_rce_single_request(payload: Dict[str, Any]):
         return {"status": "EXECUTOR_ERROR", "details": str(e)}
 
 
+@app.post("/execute/credential_bruteforce")
+def execute_credential_bruteforce(payload: Dict[str, Any]):
+    try:
+        logger.info(f"[CREDENTIAL_BRUTEFORCE] Payload: {payload}")
+        params = payload.get("parameters")
+
+        if not params:
+            return {
+                "status": "EXECUTOR_ERROR",
+                "details": "Missing parameters for credential_bruteforce",
+            }
+
+        return bruteforce_execute(params)
+
+    except Exception as e:
+        logger.exception("[EXECUTOR] credential_bruteforce failed")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": str(e),
+        }
+
+
+@app.post("/execute/framework_module_execution")
+def execute_framework_module_execution(payload: Dict[str, Any]):
+    try:
+        logger.info(f"[FRAMEWORK_MODULE_EXECUTION] Payload: {payload}")
+        params = payload.get("parameters")
+
+        if not params:
+            return {
+                "status": "EXECUTOR_ERROR",
+                "details": "Missing parameters for framework_module_execution",
+            }
+
+        return framework_module_execute(params)
+
+    except Exception as e:
+        logger.exception("[EXECUTOR] framework_module_execution failed")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": str(e),
+        }
+
+
+@app.post("/framework_module_search")
+def framework_module_search(payload: Dict[str, Any]):
+    try:
+        logger.info(f"[FRAMEWORK_MODULE_SEARCH] Payload: {payload}")
+        cve = payload.get("cve")
+        if not cve:
+            return {"ok": False, "error": "Missing CVE"}
+
+        return framework_module_search_execute(cve)
+
+    except Exception as e:
+        logger.exception(f"[FRAMEWORK_SEARCH] failed: {e}")
+        return {"ok": False, "error": str(e)}
+
+
+@app.post("/execute/framework_module_install")
+def framework_module_install(payload: dict):
+    logger.info(f"[FRAMEWORK_MODULE_INSTALL] Payload: {payload}")
+    kali_path = payload.get("parameters", {}).get("path")
+
+    if not os.path.exists(kali_path):
+        return {
+            "status": "FAILURE",
+            "details": f"Kali exploit file not found: {kali_path}",
+        }
+
+    logger.warning("[DEBUG] framework_module_install CALLED")
+    logger.warning(f"[DEBUG] kali_path = {kali_path}")
+    logger.warning(f"[DEBUG] exists(kali_path) = {os.path.exists(kali_path)}")
+
+    try:
+        target_path = build_msf_module_path(kali_path)
+        logger.warning(f"[DEBUG] COPY {kali_path} -> {target_path}")
+        if os.path.exists(target_path):
+            return {
+                "status": "SUCCESS",
+                "details": "Framework module already copied",
+            }
+
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        shutil.copyfile(kali_path, target_path)
+
+        reload_proc = subprocess.run(
+            'msfconsole -q -x "reload_all; exit"',
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+        if reload_proc.returncode != 0:
+            return {
+                "status": "FAILURE",
+                "details": reload_proc.stderr
+                or reload_proc.stdout
+                or "Metasploit reload_all failed",
+            }
+        logger.info(f"[FRAMEWORK_MODULE_INSTALL] success for {kali_path}")
+        return {
+            "status": "SUCCESS",
+            "details": "Framework module installed",
+        }
+
+    except Exception as e:
+        logger.exception(f"[FRAMEWORK_MODULE_INSTALL] failed for {kali_path}")
+        return {"status": "FAILURE", "details": str(e)}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-
-class FileUpdateRequest(BaseModel):
-    path: str
-    content_b64: str
 
 
 @app.patch("/update_exploit")

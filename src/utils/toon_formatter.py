@@ -1,4 +1,6 @@
-from typing import Any, Mapping
+from typing import Any, Dict, Mapping
+
+from src.state import AttackSurface
 
 
 def _clean(value):
@@ -7,24 +9,26 @@ def _clean(value):
     return str(value).replace(",", " ").strip()
 
 
-def port_map_to_toon(port_map: dict) -> str:
+def port_map_to_toon(port_map: dict, step=1) -> str:
     if not port_map:
-        return "services(0): -"
+        if step == 0:
+            return "Discovery not done yet"
+        return "services[0]"
 
     services_count = sum(len(ports) for ports in port_map.values())
-    header = f"services({services_count}): ip, port, name, product, version"
+    header = f"services[{services_count}]{{ip,port,name,product,version}}"
     rows = []
 
     for ip, ports in port_map.items():
         for port, info in ports.items():
             rows.append(
-                f"{ip}, {port}, "
-                f"{_clean(info.get('name'))}, "
-                f"{_clean(info.get('product'))}, "
+                f"{ip},{port},"
+                f"{_clean(info.get('name'))},"
+                f"{_clean(info.get('product'))},"
                 f"{_clean(info.get('version'))}"
             )
 
-    return f"{header}\n" + "\n".join(rows)
+    return header + "\n" + "\n".join(rows)
 
 
 def vulnerabilities_to_toon(vulnerabilities: dict) -> str:
@@ -33,55 +37,55 @@ def vulnerabilities_to_toon(vulnerabilities: dict) -> str:
     Format: target, cve_id, score, severity
     """
     if not vulnerabilities:
-        return "vulnerabilities(0): -"
+        return "vulnerabilities[0]"
 
-    all_rows = []
+    rows = []
     for target, cve_list in vulnerabilities.items():
         for cve in cve_list:
             cve_id = cve.get("cve_id", "-")
             score = cve.get("calculated_max_cvss", "-")
             severity = cve.get("severity_label", "-").upper()
+            rows.append(
+                f"{target},{cve_id},{score if score is not None else '-'},{severity}"
+            )
 
-            all_rows.append(f"{target}, {cve_id}, {score}, {severity}")
-
-    if not all_rows:
-        return "vulnerabilities(0): -"
-
-    header = f"vulnerabilities({len(all_rows)}): target, cve_id, score, severity"
-    return f"{header}\n" + "\n".join(all_rows)
+    header = f"vulnerabilities[{len(rows)}]{{target,cve_id,score,severity}}"
+    return header + "\n" + "\n".join(rows)
 
 
 def found_exploits_to_toon(found_exploits: dict) -> str:
     """
-    Converts FoundExploit dicts into compact TOON table.
-    Assumes state is normalized as dictionaries via model_dump().
+    Converts found exploits and framework modules into a compact TOON table.
     """
-    if not found_exploits:
-        return "exploits(0): -"
 
-    all_rows = []
-    for target, exploits in found_exploits.items():
-        for exp in exploits:
+    if not found_exploits:
+        return "exploits[0]"
+
+    rows = []
+
+    for target, entry in found_exploits.items():
+        # --- ExploitDB exploits ---
+        for exp in entry.get("exploits", []):
             eid = exp.get("edb_id", "-")
             title = exp.get("title", "-")
-            local_path = exp.get("local_path", "-")
             clean_title = str(title).replace(",", " ").strip()
-            all_rows.append(f"{target}, {eid}, {clean_title}, {local_path}")
+            rows.append(f"{target},exploitdb,{eid},{clean_title}")
 
-    if not all_rows:
-        return "exploits(0): -"
+        # --- Framework modules ---
+        for module in entry.get("framework_modules", []):
+            rows.append(f"{target},framework,{module},-")
 
-    header = f"exploits({len(all_rows)}): target, edb_id, title, local_path"
-    return f"{header}\n" + "\n".join(all_rows)
+    header = f"exploits[{len(rows)}]:target,type,id_or_path,title"
+    return f"{header}\n" + "\n".join(rows)
 
 
 def pending_services_for_search_to_toon(pending_data: dict) -> str:
     if not pending_data:
-        return "pending_search(0): -"
+        return "No pending services for search"
 
     total_count = sum(len(services) for services in pending_data.values())
 
-    header = f"pending_search({total_count}): ip, port, product, version"
+    header = f"pending_search[{total_count}]:ip,port,product,version"
     rows = []
 
     for ip, services in pending_data.items():
@@ -89,7 +93,7 @@ def pending_services_for_search_to_toon(pending_data: dict) -> str:
             port = svc.get("port", "-")
             prod = _clean(svc.get("product"))
             ver = _clean(svc.get("version"))
-            rows.append(f"{ip}, {port}, {prod}, {ver}")
+            rows.append(f"{ip},{port},{prod},{ver}")
 
     return f"{header}\n" + "\n".join(rows)
 
@@ -117,63 +121,6 @@ def get_minimal_toon_context(values: dict) -> str:
     return "\n".join(toon_report)
 
 
-def thoughts_to_toon(thought_log) -> str:
-    if not thought_log:
-        return ""
-
-    formatted_steps = []
-
-    noise_patterns = [
-        "Welcome to Ubuntu",
-        " * ",
-        "Documentation:",
-        "Management:",
-        "Support:",
-        "Last login:",
-        "Pseudo-terminal",
-        "Warning: Permanently added",
-        "mesg: ttyname failed",
-    ]
-
-    tech_errors = [
-        "TabError",
-        "SyntaxError",
-        "No such file",
-        "IndentationError",
-        "can't open file",
-    ]
-
-    for entry in thought_log:
-        step = entry.get("step", "?")
-        action = entry.get("action", "Unknown")
-        raw_result = entry.get("result", "No result recorded")
-
-        if any(err in str(raw_result) for err in tech_errors):
-            clean_result = (
-                "FAILED: Technical error (Script incompatible or environment issue)."
-            )
-
-        else:
-            lines = str(raw_result).splitlines()
-            filtered_lines = [
-                line.strip()
-                for line in lines
-                if not any(noise in line for noise in noise_patterns) and line.strip()
-            ]
-
-            clean_result = (
-                "\n".join(filtered_lines) if filtered_lines else str(raw_result)[:100]
-            )
-
-            if len(clean_result) > 200:
-                clean_result = clean_result[:200] + " [...]"
-
-        step_str = f"[S{step}] Action: {action} -> Result: {clean_result}"
-        formatted_steps.append(step_str)
-
-    return "\n".join(formatted_steps)
-
-
 def exploit_results_to_toon(exploit_state: Mapping[str, Any]) -> str:
     """
     Converts successful exploitation results into a compact TOON table.
@@ -181,13 +128,13 @@ def exploit_results_to_toon(exploit_state: Mapping[str, Any]) -> str:
     """
 
     if not exploit_state or not exploit_state.get("finished"):
-        return "exploitation(0): -"
+        return "exploitation[0]"
 
     results = exploit_state.get("results", [])
     compromised = exploit_state.get("compromised_targets", {})
 
     if not results or not compromised:
-        return "exploitation(0): -"
+        return "exploitation[0]"
 
     rows = []
 
@@ -219,11 +166,63 @@ def exploit_results_to_toon(exploit_state: Mapping[str, Any]) -> str:
 
         proof = " | ".join(proof_parts) if proof_parts else "-"
 
-        rows.append(f"{target}, {port}, {exploit_id}, {privilege}, {proof}")
+        rows.append(f"{target},{port},{exploit_id},{privilege},{proof}")
 
     if not rows:
-        return "exploitation(0): -"
+        return "exploitation[0]"
 
-    header = f"exploitation({len(rows)}): target, port, exploit_id, privilege, proof"
+    header = f"exploitation[{len(rows)}]:target,port,exploit_id,privilege,proof"
 
     return f"{header}\n" + "\n".join(rows)
+
+
+def pending_surfaces_to_toon(pending_surfaces: Dict[str, AttackSurface]) -> str:
+    """
+    Convert pending_surfaces into TOON format for exploit planner.
+    Format:
+    pending_surfaces[N]{surface_id,service,product,port,cves,available_exploits,attempted_exploits}
+    """
+
+    count = len(pending_surfaces)
+    header = (
+        f"pending_surfaces[{count}]"
+        "{surface_id,service,product,port,cves,available_exploits,attempted_exploits}"
+    )
+
+    if not pending_surfaces:
+        return header
+
+    rows = []
+
+    for surface_id, surface in pending_surfaces.items():
+        service = surface.get("service", "-")
+        product = surface.get("product") or "-"
+        port = surface_id.split(":")[-1]
+
+        # CVEs
+        cves = surface.get("cves", [])
+        cves_str = "|".join(cves) if cves else "-"
+
+        # Available exploits (using next_tool IDs, as you decided)
+        exploit_ids = surface.get("exploit_ids", [])
+        available_exploits = "|".join(exploit_ids) if exploit_ids else "-"
+
+        # Attempted exploits history
+        attempted_map = surface.get("attempted_exploits", {})
+        attempted_exploits = (
+            "|".join(f"{k}:{v}" for k, v in attempted_map.items())
+            if attempted_map
+            else "-"
+        )
+
+        rows.append(
+            f"{surface_id},"
+            f"{service},"
+            f"{product},"
+            f"{port},"
+            f"{cves_str},"
+            f"{available_exploits},"
+            f"{attempted_exploits}"
+        )
+
+    return header + "\n" + "\n".join(rows)
