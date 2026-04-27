@@ -95,8 +95,6 @@ graph TD
 
     Supervisor <.-> Ollama
     ReconPlanner <.-> Ollama
-    CvePlanner <.-> Ollama
-    VulnMapPlanner <.-> Ollama
     ExploitPlanner <.-> Ollama
 
     subgraph "🐉 Kali Linux Tools Container"
@@ -111,7 +109,7 @@ graph TD
     ReconExec <--"POST /recon"--> KaliAPI
     CveExec <--"POST /cve_lookup"--> KaliAPI
     VulnMapExec <--"POST /search_exploit"--> KaliAPI
-    ExploitExec <--"POST /mock_exploit (planned)"--> KaliAPI
+    ExploitExec <--"POST /exploit"--> KaliAPI
 
     KaliAPI <--> Nmap
     KaliAPI <--> NVDSearch
@@ -146,17 +144,17 @@ Runs:
 
 A hardened container that:
 
-*   Executes Nmap, DNS, banner-grabs, CVE lookups, exploit searches
+*   Executes Network mapper, CVE lookups, exploit searches, exploit executions and tools.
 *   Applies **dynamic egress firewalling** to ensure:
     *   Only target hosts are reachable
     *   Gateway and self are blocked
-*   Receives tool execution requests via REST (`/run`) (Soon)
+*   Receives tool execution requests via REST API
 
 ### **3. Vulnerable Targets**
 
 Isolated inside `attack_net`:
 
-*   Reached only by Kali
+*   Reachable only by Kali Engine
 *   Never visible to orchestrator
 *   Discoverable by recon subgraph
 
@@ -181,8 +179,8 @@ Isolated inside `attack_net`:
 
 *   **Exploit Subgraph (actively working)**
     *   Planner → Executor loop
-    *   Planner selects exploit vectors
-    *   Executor performs exploits selecting available tools
+    *   Planner selects exploit vector
+    *   Executor performs exploits selecting found exploits or available tools
     *   Produces structured findings
 
 ***
@@ -229,11 +227,10 @@ Isolated inside `attack_net`:
 *   Knowledge persistence integration
 *   Human-in-the-Loop integration
 *   Automatic mitigation suggestions
+*   Exploit usage
 
 ### 🚧 In Progress
 
-*   "Would exploit" planning
-*   Exploit usage
 *   More thorough testing on various targets
 
 ### 🔜 Future plans
@@ -287,7 +284,7 @@ The orchestrator requires write permissions to persist intelligence data:
 
 ### 🌐 Network Configuration
 
-* The system creates a dedicated internal bridge network (**10.255.255.0/24**). Ensure no local firewall rules (like `iptables` or Windows Firewall) block traffic between Docker containers and the host's Ollama port (11434).
+* The system creates two dedicated internal bridge networks (**10.255.254.0/24**, **10.255.255.0/24**). Ensure no local firewall rules (like `iptables` or Windows Firewall) block traffic between Docker containers and the host's Ollama port (11434).
 
 ***
 
