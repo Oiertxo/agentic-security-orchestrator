@@ -33,14 +33,21 @@ async def vuln_map_planner_node(
     # End if nothing pending
     if not pending or all(len(services) == 0 for services in pending.values()):
         found_exploits = vuln_map_state.get("found_exploits", {})
-        for _, exploits in found_exploits.items():
+
+        for _, entry in found_exploits.items():
+            exploits = entry.get("exploits", [])
+
             for exp in exploits:
                 path_in_kali = exp.get("path", "")
                 edb_id = exp.get("edb_id", "")
 
+                if not path_in_kali or not edb_id:
+                    continue
+
                 local_path = save_exploit_locally(path_in_kali, edb_id)
                 if local_path:
                     exp["local_path"] = local_path
+
         return {
             **state,
             "vuln_map": {
