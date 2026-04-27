@@ -225,7 +225,7 @@ def supervisor_state_view(state: AgentState) -> dict:
             "finished": exploit.get("finished", False),
             "results": get_last_result(exploit),
         },
-        "messages": state.get("messages"),
+        "message_history": state.get("messages"),
         "report_finished": state.get("report_finished", False),
     }
 
