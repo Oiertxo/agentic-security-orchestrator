@@ -26,7 +26,7 @@ def build_recon_subgraph():
 
     graph.add_node("planner", recon_planner_node)
     graph.add_node("executor", recon_executor_node)
-    graph.add_node("web_recon", web_recon_node)
+    # graph.add_node("web_recon", web_recon_node)
 
     graph.set_entry_point("planner")
 
