@@ -39,38 +39,23 @@ class ExploitPayloadStep(BaseModel):
 
 
 class ExploitSchema(BaseModel):
+    is_framework_module: bool = Field(
+        ..., description="True if this exploit is a Metasploit framework module"
+    )
     exploit_behavior: Literal["bind_shell", "reverse_shell", "http_rce", "other"] = (
         Field(..., description="High-level behavior of the exploit")
     )
-
     arguments: List[
         Literal["RHOST", "RPORT", "LHOST", "LPORT", "BIND_PORT", "URL", "FILE", "CMD"]
     ] = Field(
         default_factory=list,
         description="Conceptual parameters referenced by the exploit without fixed values",
     )
-
     hardcoded_values: Dict[str, int | str] = Field(
         default_factory=dict,
         description="Literal constant values embedded in the exploit (ports, paths, filenames, etc.)",
     )
-
     payloads: List[ExploitPayloadStep] = Field(
         default_factory=list,
         description="Ordered exploitation dialogue extracted from the exploit",
     )
-
-    reasoning: str = Field(
-        ..., description="Brief explanation of how the exploit works"
-    )
-
-
-class ExploitOutputClassifierSchema(BaseModel):
-    classification: str
-    reasoning: str
-
-
-class ExploitFixerSchema(BaseModel):
-    result: str
-    fixed_script: Optional[str] = None
-    reasoning: str
