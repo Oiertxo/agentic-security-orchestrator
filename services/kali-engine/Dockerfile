@@ -17,20 +17,31 @@ RUN apt-get update && \
     dnsutils \
     curl \
     wget \
+    netcat-traditional \
     git \
     gnupg \
     build-essential \
     metasploit-framework \
     hydra \
     sqlmap \
+    gobuster \
     ncrack \
     sshpass \
+    tcpdump \
     python3 \
     python3-pip \
     python3-venv \
     python3-dev \
     python3-full \
     python-is-python3 \
+    python3-colorama \
+    python3-termcolor \
+    python3-pyfiglet \
+    python3-requests \
+    python3-urllib3 \
+    python3-bs4 \
+    python3-lxml \
+    python3-netaddr \
     perl \
     libnet-ssleay-perl \
     libio-socket-ssl-perl \
