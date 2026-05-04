@@ -400,32 +400,23 @@ async def run_graph_stream(input_data, config, thread_id):
     if security_graph is None:
         return
 
+    last_status_node = None
+
     async for event in security_graph.astream_events(
         input_data, config=config, version="v2"
     ):
         kind = event["event"]
-        name = event["name"]
-        metadata = event.get("metadata", {})
-        node_name = metadata.get("langgraph_node")
+        node_name = event.get("metadata", {}).get("langgraph_node")
 
-        if kind == "on_chain_start" and node_name:
-            yield f"data: {
-                json.dumps({'node': node_name, 'type': 'status', 'event': 'start'})
-            }\n\n"
+        if kind == "on_chat_model_stream":
+            chunk = event.get("data", {}).get("chunk")
+            if chunk and getattr(chunk, "content", None):
+                yield f"data: {json.dumps({'token': chunk.content})}\n\n"
 
-        elif kind == "on_chain_end" and node_name:
-            yield f"data: {
-                json.dumps({'node': node_name, 'type': 'status', 'event': 'end'})
-            }\n\n"
-
-        elif kind == "on_chat_model_stream":
-            data = event.get("data", {})
-            chunk = data.get("chunk")
-
-            if chunk and hasattr(chunk, "content"):
-                content = chunk.content
-                if content:
-                    yield f"data: {json.dumps({'token': content, 'type': 'content'})}\n\n"
+        elif kind not in ("on_chain_end",):
+            if node_name and node_name != last_status_node:
+                last_status_node = node_name
+                yield f"data: {json.dumps({'node': node_name})}\n\n"
 
     final_state = await security_graph.aget_state(config)
     if not final_state.next:
@@ -461,7 +452,6 @@ async def format_graph_response(result, config, thread_id):
             "thread_id": thread_id,
         }
 
-    # El resultado del invoke asíncrono suele estar en el snapshot final
     last_message = (
         final_snapshot.values["messages"][-1].content
         if final_snapshot.values.get("messages")

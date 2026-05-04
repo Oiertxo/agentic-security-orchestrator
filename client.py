@@ -34,7 +34,7 @@ def stream_audit(query, thread_id, start_new):
 
                         elif "node" in content:
                             node_name = content["node"].upper()
-                            print(f"\n\n[SYSTEM] Entering phase: {node_name}")
+                            print(f"\n\n[SYSTEM] Node: {node_name}")
                             print(" > ", end="", flush=True)
 
                         elif "error" in content:
