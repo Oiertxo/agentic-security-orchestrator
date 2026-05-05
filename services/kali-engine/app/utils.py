@@ -99,18 +99,11 @@ def _normalize_text(s: str) -> str:
 def _build_keyword_search(req: CveLookupRequest) -> str:
     """
     Build a consistent keyword string.
-    We avoid commands or exploit guidance; this is only metadata search.
     """
-    version_clean = ""
-    if req.version:
-        match = re.search(r"(\d+\.\d+)", req.version)
-        version_clean = match.group(1) if match else req.version
 
     parts = []
     if req.product:
         parts.append(req.product)
-    if version_clean:
-        parts.append(version_clean)
 
     if not parts and req.service:
         parts.append(req.service)
@@ -128,30 +121,49 @@ def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
     cve_id = cve.get("id")
     metrics = cve.get("metrics", {})
 
-    def first_metric(metric_key: str) -> Optional[dict[str, Any]]:
+    def first_metric(metric_key: str):
         arr = metrics.get(metric_key)
-        if isinstance(arr, list) and arr:
-            return arr[0]
-        return None
+        return arr[0] if isinstance(arr, list) and arr else None
 
-    def base_score(block: Optional[dict[str, Any]]) -> Optional[float]:
-        if not block:
-            return None
-        data = block.get("cvssData", {})
-        return data.get("baseScore")
+    def base_score(block):
+        return block.get("cvssData", {}).get("baseScore") if block else None
 
     cvss_v31 = first_metric("cvssMetricV31")
     cvss_v30 = first_metric("cvssMetricV30")
     cvss_v2 = first_metric("cvssMetricV2")
 
+    # Get configs
+    configurations = []
+    raw_configs = cve.get("configurations")
+    nodes = []
+    if isinstance(raw_configs, dict):
+        nodes = raw_configs.get("nodes", [])
+    elif isinstance(raw_configs, list):
+        for entry in raw_configs:
+            if isinstance(entry, dict):
+                nodes.extend(entry.get("nodes", []))
+
+    for node in nodes:
+        for match in node.get("cpeMatch", []):
+            if not match.get("vulnerable"):
+                continue
+
+            configurations.append(
+                {
+                    "criteria": match.get("criteria"),
+                    "versionStartIncluding": match.get("versionStartIncluding"),
+                    "versionStartExcluding": match.get("versionStartExcluding"),
+                    "versionEndIncluding": match.get("versionEndIncluding"),
+                    "versionEndExcluding": match.get("versionEndExcluding"),
+                }
+            )
+
     return {
         "cve_id": cve_id,
-        # "published": published,
-        # "last_modified": last_modified,
-        # "description": desc,
         "cvss_v31_base": base_score(cvss_v31),
         "cvss_v30_base": base_score(cvss_v30),
         "cvss_v2_base": base_score(cvss_v2),
+        "configurations": configurations,
     }
 
 
