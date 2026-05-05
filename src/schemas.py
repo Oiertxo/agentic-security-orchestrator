@@ -28,6 +28,7 @@ class PlannerSchema(BaseModel):
     finished: bool
     next_tool: Optional[str] = None
     arguments: PlannerArguments
+    reasoning: Optional[str] = None
     thought: Optional[ThoughtSchema] = None
 
 

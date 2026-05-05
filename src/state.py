@@ -70,8 +70,8 @@ class VulnMapState(TypedDict, total=False):
     results: List[dict]
     finished: bool
     step_count: int
-    analyzed_services_for_search: Dict[str, List[int]]
-    pending_services_for_search: Dict[str, List[Dict[str, Any]]]
+    analyzed_services_for_search: Dict[str, Dict[int, List[str]]]
+    pending_services_for_search: Dict[str, Dict[int, List[str]]]
     found_exploits: Dict[str, Dict[str, List[Any]]]
 
 
