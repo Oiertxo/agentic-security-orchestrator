@@ -22,8 +22,10 @@ async def vuln_map_executor_node(
     new_step = int(old_vuln_map.get("step_count", 0)) + 1
     found_map = {k: dict(v) for k, v in old_vuln_map.get("found_exploits", {}).items()}
     analyzed_services_for_search = old_vuln_map.get("analyzed_services_for_search", {})
+    analyzed_services_for_search = old_vuln_map.get("analyzed_services_for_search", {})
     new_analyzed_services_for_search = {
-        ip: list(ports) for ip, ports in analyzed_services_for_search.items()
+        ip: {port: list(cves) for port, cves in ports.items()}
+        for ip, ports in analyzed_services_for_search.items()
     }
 
     raw = state["messages"][-1].content
@@ -108,9 +110,13 @@ async def vuln_map_executor_node(
             )
         )
 
-        new_analyzed_services_for_search.setdefault(target_ip, [])
-        if target_port not in new_analyzed_services_for_search[target_ip]:
-            new_analyzed_services_for_search[target_ip].append(target_port)
+        target_cve = args.get("cve")
+
+        new_analyzed_services_for_search.setdefault(target_ip, {})
+        new_analyzed_services_for_search[target_ip].setdefault(target_port, [])
+
+        if target_cve not in new_analyzed_services_for_search[target_ip][target_port]:
+            new_analyzed_services_for_search[target_ip][target_port].append(target_cve)
 
         summary = {
             "ok": True,
@@ -131,22 +137,6 @@ async def vuln_map_executor_node(
             "tool": "search_exploit",
         }
 
-    port_map = state.get("recon", {}).get("port_map", {})
-    pending_services_for_search = {}
-
-    for ip, ports in port_map.items():
-        searched_exploit_ip = new_analyzed_services_for_search.get(ip, [])
-
-        for port, info in ports.items():
-            product = info.get("product")
-            version = info.get("version")
-
-            if product and version:
-                if port not in searched_exploit_ip:
-                    pending_services_for_search.setdefault(ip, []).append(
-                        {"port": port, "product": product, "version": version}
-                    )
-
     logger.info(f"[VULN_MAP_EXECUTOR] Result summary: {summary}")
 
     updated_vuln_map: VulnMapState = {
@@ -155,7 +145,6 @@ async def vuln_map_executor_node(
         "step_count": new_step,
         "found_exploits": found_map,
         "analyzed_services_for_search": new_analyzed_services_for_search,
-        "pending_services_for_search": pending_services_for_search,
         "finished": False,
     }
 
