@@ -55,4 +55,4 @@ remove-network:
 
 	
 next:
-    python3 lift_services.py
+	python3 lift_services.py
