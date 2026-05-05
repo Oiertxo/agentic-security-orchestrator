@@ -1,6 +1,7 @@
 import json
 from typing import Any, Dict
 
+from langchain_community.callbacks import get_openai_callback
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
@@ -19,6 +20,8 @@ async def recon_planner_node(state: AgentState, config: RunnableConfig) -> Agent
     llm = get_model()
     system_prompt = load_prompt("recon.txt")
     recon_state = state.get("recon", {})
+
+    logger.info(f"[RECON_PLANNER] State received: {state}")
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -62,7 +65,13 @@ async def recon_planner_node(state: AgentState, config: RunnableConfig) -> Agent
         output_type=PlannerSchema,
     )
 
-    raw_result = await chain.ainvoke(planner_input, config=config)
+    with get_openai_callback() as cb:
+        raw_result = await chain.ainvoke(planner_input, config=config)
+
+    tokens = cb.total_tokens
+
+    logger.info(f"[RECON_PLANNER] Callback: {cb}")
+
     result = PlannerSchema.model_validate(raw_result)
     data = result.model_dump(mode="json")
 
