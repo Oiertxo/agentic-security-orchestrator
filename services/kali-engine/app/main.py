@@ -66,6 +66,8 @@ def run(req: ReconRequest):
 
     if req.next_tool == "nmap":
         ensure_nmap_options(req.options)
+        if "-sS" in req.options:
+            req.options.append("-p-")
         try:
             with open("/etc/nmap-exclude", "r") as f:
                 exclude_ips = f.read().strip()
@@ -262,23 +264,51 @@ def exploit(request: ExploitRequest):
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     logger.info(f"[MANUAL] Result: {result}")
 
-    if result.returncode != 0:
-        return {
-            "status": "FAILURE",
-            "details": result.stderr.strip() or result.stdout.strip(),
-            "artifact": {
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "returncode": result.returncode,
-            },
-        }
+    ERROR_PATTERNS = [
+        "request failed",
+        "invalid url",
+        "no scheme supplied",
+        "connection refused",
+        "connection error",
+        "timeout",
+        "traceback",
+        "exception",
+        "error:",
+    ]
+
+    SUCCESS_PATTERNS = [
+        "uid=",
+        "gid=",
+        "root",
+        "www-data",
+    ]
+
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    combined = f"{stdout}\n{stderr}".lower()
+
+    if any(err in combined for err in ERROR_PATTERNS):
+        status = "FAILURE"
+        details = stdout or stderr or "Exploit reported an error"
+
+    elif any(ok in combined for ok in SUCCESS_PATTERNS):
+        status = "SUCCESS"
+        details = stdout
+
+    elif result.returncode != 0:
+        status = "FAILURE"
+        details = stderr or stdout or "Non-zero return code"
+
+    else:
+        status = "UNKNOWN"
+        details = stdout or "Ambiguous exploit output"
 
     return {
-        "status": "SUCCESS",
-        "details": result.stdout.strip() or "Command executed successfully",
+        "status": status,
+        "details": details,
         "artifact": {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "stdout": stdout,
+            "stderr": stderr,
             "returncode": result.returncode,
         },
     }
@@ -456,6 +486,74 @@ def framework_module_install(payload: dict):
     except Exception as e:
         logger.exception(f"[FRAMEWORK_MODULE_INSTALL] failed for {kali_path}")
         return {"status": "FAILURE", "details": str(e)}
+
+
+@app.post("/execute/curl")
+def execute_curl(payload: Dict[str, Any]):
+    """
+    Execute a curl request from the Kali Engine.
+    Used for generic HTTP probing (OpenAPI, headers, pages, etc).
+    """
+    try:
+        url = payload.get("url")
+        method = payload.get("method", "GET").upper()
+        headers = payload.get("headers", {})
+        data = payload.get("data")
+        follow_redirects = payload.get("follow_redirects", True)
+
+        if not url:
+            return {
+                "status": "EXECUTOR_ERROR",
+                "details": "Missing 'url' parameter",
+            }
+
+        if not url.startswith(("http://", "https://")):
+            return {
+                "status": "EXECUTOR_ERROR",
+                "details": "Only http:// or https:// URLs are allowed",
+            }
+
+        # Command creation
+        cmd = ["curl", "-sS"]
+        if follow_redirects:
+            cmd.append("-L")
+        cmd.extend(["-X", method])
+        for k, v in headers.items():
+            cmd.extend(["-H", f"{k}: {v}"])
+        if data:
+            cmd.extend(["--data", data])
+        cmd.append(url)
+
+        logger.info(f"[CURL_EXECUTOR] Command: {cmd}")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=HTTP_TIMEOUT,
+        )
+
+        return {
+            "status": "SUCCESS" if result.returncode == 0 else "FAILURE",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode,
+            "command": " ".join(cmd),
+        }
+
+    except subprocess.TimeoutExpired:
+        logger.exception("[CURL_EXECUTOR] timeout")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": "curl execution timed out",
+        }
+
+    except Exception as e:
+        logger.exception("[CURL_EXECUTOR] failed")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": str(e),
+        }
 
 
 @app.get("/health")

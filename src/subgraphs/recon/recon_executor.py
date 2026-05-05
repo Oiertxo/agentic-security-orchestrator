@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any, Dict
 from xml.etree import ElementTree
 
@@ -8,7 +9,7 @@ from langfuse import observe
 
 from src.logger import logger
 from src.state import AgentState, PortMap, ReconState, ServiceMeta
-from src.subgraphs.recon.recon_executor_client import call_recon_engine
+from src.subgraphs.recon.recon_executor_client import call_curl, call_recon_engine
 from src.utils.utils import (
     derive_pending_hosts,
     merge_port_map,
@@ -16,6 +17,9 @@ from src.utils.utils import (
     target_is_network,
     was_version_scan,
 )
+
+OPENAPI_VERSION_RE = re.compile(r'"version"\s*:\s*"([^"]+)"')
+OPENAPI_TITLE_RE = re.compile(r'"title"\s*:\s*"([^"]+)"')
 
 
 @observe(name="Recon executor")
@@ -82,6 +86,9 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
                     and target not in new_scanned
                 ):
                     new_scanned.append(target)
+
+    # HTTP lookup
+    new_port_map = await openapi_http_lookup(new_port_map)
 
     new_pending = derive_pending_hosts(new_port_map, new_scanned)
     logger.info(f"[RECON_EXECUTOR] Recon engine result: {summary}")
@@ -171,3 +178,51 @@ def parse_nmap_xml(xml_str: str) -> Dict[str, Any]:
         },
         "port_map": port_map,
     }
+
+
+async def openapi_http_lookup(
+    port_map: Dict[str, Dict[int, ServiceMeta]],
+) -> Dict[str, Dict[int, ServiceMeta]]:
+    """
+    - Detect HTTP services in port_map
+    - Try to get info of OpenAPI with a curl to openapi.json
+    - Extract title/version
+    """
+
+    for ip, ports in port_map.items():
+        for port, meta in ports.items():
+            service_name = (meta.get("name") or "").lower()
+            product = (meta.get("product") or "").lower()
+
+            # Try to get OpenAPI info
+            if service_name == "http" or "http" in product:
+                url = f"http://{ip}:{port}/openapi.json"
+
+                logger.info(f"[HTTP_LOOKUP] Probing OpenAPI at {url}")
+
+                try:
+                    result = await call_curl(
+                        url=url,
+                        method="GET",
+                        timeout=10.0,
+                    )
+                except Exception as e:
+                    logger.warning(f"[HTTP_LOOKUP] Error probing {url}: {e}")
+                    continue
+
+                logger.info(f"[HTTP_LOOKUP] Result: {result}")
+                stdout = (result.get("response") or {}).get("stdout", "")
+                if not stdout or '"openapi"' not in stdout:
+                    continue
+
+                # Extract title / version
+                title_match = OPENAPI_TITLE_RE.search(stdout)
+                version_match = OPENAPI_VERSION_RE.search(stdout)
+
+                if title_match:
+                    meta["product"] = title_match.group(1)
+
+                if version_match:
+                    meta["version"] = version_match.group(1)
+
+    return port_map
