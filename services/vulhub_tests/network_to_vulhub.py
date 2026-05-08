@@ -2,7 +2,7 @@ import os
 
 import yaml
 
-ATTACK_NET = "agentic-security-orchestrator_attack_net"
+ATTACK_NET = "attack_net"
 SKIP_DIRS = {".git", ".github", ".claude"}
 
 
@@ -52,7 +52,7 @@ def patch_compose(compose_path: str):
 def main():
     patched = 0
 
-    for root, dirs, files in os.walk("../../../vulhub"):
+    for root, dirs, files in os.walk("./containers"):
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
 
         if "docker-compose.yml" in files or "docker-compose.yaml" in files:
