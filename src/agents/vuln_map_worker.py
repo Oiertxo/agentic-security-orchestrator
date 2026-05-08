@@ -6,13 +6,15 @@ from src.logger import logger
 from src.state import AgentState, VulnMapState
 from src.subgraphs.vuln_map.vuln_map_subgraph import vuln_map_subgraph
 
+MAX_CVES_PER_PORT = 10
+
 
 @observe(name="Vuln Map Worker")
 async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
     old_vuln_map = state.get("vuln_map", {})
     cve_state = state.get("cve", {})
 
-    if "pending_cves_for_search" not in old_vuln_map:
+    if "pending_services_for_search" not in old_vuln_map:
         pending = {}
         analyzed = {}
 
@@ -25,7 +27,13 @@ async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> Age
             pending.setdefault(ip, {}).setdefault(port, [])
             analyzed.setdefault(ip, {}).setdefault(port, [])
 
-            for c in cves:
+            sorted_cves = sorted(
+                cves,
+                key=cve_priority,
+                reverse=True,
+            )
+
+            for c in sorted_cves[:MAX_CVES_PER_PORT]:
                 cve_id = c.get("cve_id")
                 if cve_id:
                     pending[ip][port].append(cve_id)
@@ -40,6 +48,7 @@ async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> Age
                 "found_exploits": {},
             },
         }
+
     out = await vuln_map_subgraph.ainvoke(state, config)
     logger.info(f"[VULN_MAP_WORKER_NODE] Output: {out}")
 
@@ -66,3 +75,15 @@ async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> Age
         + [HumanMessage(content=f"[SOURCE: VULN_MAP]\n{executive_summary}")],
         "next_step": "supervisor",
     }
+
+
+def cve_priority(c: dict) -> tuple:
+    cve_id = c.get("cve_id", "")
+    try:
+        year = int(cve_id.split("-")[1])
+    except (IndexError, ValueError):
+        year = 0
+
+    score = c.get("calculated_max_cvss", 0.0)
+
+    return (year, score)

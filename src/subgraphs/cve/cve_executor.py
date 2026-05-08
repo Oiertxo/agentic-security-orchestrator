@@ -1,4 +1,3 @@
-import json
 import re
 from typing import Any, Dict, Optional, Tuple
 
@@ -9,12 +8,12 @@ from langfuse import observe
 from src.logger import logger
 from src.state import AgentState, CveState
 from src.subgraphs.cve.cve_executor_client import call_cve_lookup
-from src.utils.utils import get_cvss_severity, parse_as_json
+from src.utils.utils import get_cvss_severity
 
 
 @observe(name="CVE executor")
 async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentState:
-    logger.info(f"[CVE_EXECUTOR] Received state: {state}")
+    logger.info("[CVE_EXECUTOR] Entering CVE executor")
     old_cve = state.get("cve", {})
     new_step = int(old_cve.get("step_count", 0)) + 1
     current_vulnerabilities = dict(old_cve.get("vulnerabilities", {}))
@@ -23,27 +22,25 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
         ip: list(ports) for ip, ports in analyzed_services_for_cve.items()
     }
 
-    raw = state["messages"][-1].content
-    logger.info(f"[CVE_EXECUTOR] plan: {raw}")
-    try:
-        plan = parse_as_json(raw)
-    except Exception:
-        result = {"ok": False, "error": "planner_output_not_json", "raw": raw}
+    plan = state["cve"].get("planner", {})
+
+    logger.info(f"[CVE_EXECUTOR] Plan: {plan}")
+
+    if not plan:
         return {
             **state,
-            "messages": [
-                HumanMessage(content=f"[SOURCE: cve_lookup]\n{json.dumps(result)}")
-            ],
+            "messages": [HumanMessage(content="[CV_EXECUTOR] Error: Empty plan")],
             "cve": {
                 **old_cve,
-                "results": (old_cve.get("results", [])) + [result],
+                "results": (old_cve.get("results", []))
+                + [{"ok": False, "error": "Emply plan"}],
                 "step_count": new_step,
             },
             "next_step": "planner",
         }
 
     args = plan.get("arguments", {})
-    target_ip = args.get("target").split(":")[0]
+    target_ip = args.get("target", "").split(":")[0]
     target_port = args.get("port")
 
     engine_result = await call_cve_lookup(plan=plan)
@@ -64,16 +61,28 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
             item
             for item in applicable_items
             if (item.get("cvss_v31_base") and item["cvss_v31_base"] >= 8.0)
+            or (item.get("cvss_v30_base") and item["cvss_v30_base"] >= 8.0)
             or (item.get("cvss_v2_base") and item["cvss_v2_base"] >= 8.0)
         ]
 
         for item in filtered_items:
             item["calculated_max_cvss"] = max(
-                filter(None, [item.get("cvss_v31_base"), item.get("cvss_v2_base")]),
+                filter(
+                    None,
+                    [
+                        item.get("cvss_v31_base"),
+                        item.get("cvss_v30_base"),
+                        item.get("cvss_v2_base"),
+                    ],
+                ),
                 default=0,
             )
             item["severity_label"] = get_cvss_severity(
-                [item.get("cvss_v31_base"), item.get("cvss_v2_base")]
+                [
+                    item.get("cvss_v31_base"),
+                    item.get("cvss_v30_base"),
+                    item.get("cvss_v2_base"),
+                ]
             )
 
         # Update vulnerabilities
@@ -142,12 +151,6 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
 
 
 def _parse_version_tuple(v: str) -> Optional[Tuple[int, ...]]:
-    """
-    Parse a numeric version string into a tuple.
-    Examples:
-      "1.2.3" → (1, 2, 3)
-      "4.7"   → (4, 7)
-    """
     parts = v.split(".")
     nums = []
     for p in parts:
@@ -217,78 +220,88 @@ def normalize_version(raw_version: Optional[str]) -> Dict[str, Any]:
 
 
 def is_cve_applicable(item: Dict, detected_version: Dict) -> bool:
-    """
-    Decide if a CVE applies to the detected version.
+    logger.warning(
+        f"[CVE_EXECUTOR]: DEBUG is cve applicable {item}, {detected_version}"
+    )
 
-    item:
-      {
-        "cve_id": "...",
-        "configurations": [
-            {
-                "criteria": "cpe:2.3:a:langflow:langflow:*:*:*:*:*:*:*:*",
-                "versionStartIncluding": "1.2.0",
-                "versionEndExcluding": "1.3.0"
-            }
-        ]
-      }
-
-    detected_version:
-      output of normalize_version()
-    """
-
+    # Fail-closed
     if detected_version.get("type") == "unknown":
-        return True
+        return False
 
     configs = item.get("configurations", [])
     if not configs:
-        return True
+        return False
 
     for cfg in configs:
-        v_start_inc = cfg.get("versionStartIncluding")
-        v_start_exc = cfg.get("versionStartExcluding")
-        v_end_inc = cfg.get("versionEndIncluding")
-        v_end_exc = cfg.get("versionEndExcluding")
+        if not any(
+            cfg.get(k)
+            for k in (
+                "versionStartIncluding",
+                "versionStartExcluding",
+                "versionEndIncluding",
+                "versionEndExcluding",
+            )
+        ):
+            continue
 
-        # Single value version
+        # Parsear límites (None si no existen)
+        start_inc = (
+            _parse_version_tuple(cfg["versionStartIncluding"])
+            if cfg.get("versionStartIncluding")
+            else None
+        )
+        start_exc = (
+            _parse_version_tuple(cfg["versionStartExcluding"])
+            if cfg.get("versionStartExcluding")
+            else None
+        )
+        end_inc = (
+            _parse_version_tuple(cfg["versionEndIncluding"])
+            if cfg.get("versionEndIncluding")
+            else None
+        )
+        end_exc = (
+            _parse_version_tuple(cfg["versionEndExcluding"])
+            if cfg.get("versionEndExcluding")
+            else None
+        )
+
+        # -------------------------
+        # SINGLE VERSION
+        # -------------------------
         if detected_version["type"] == "single":
             v = detected_version["version"]
 
-            if v_start_inc:
-                if not v >= tuple(map(int, v_start_inc.split("."))):
-                    continue
+            lower_ok = (start_inc is None or v >= start_inc) and (
+                start_exc is None or v > start_exc
+            )
 
-            if v_start_exc:
-                if not v > tuple(map(int, v_start_exc.split("."))):
-                    continue
+            upper_ok = (end_inc is None or v <= end_inc) and (
+                end_exc is None or v < end_exc
+            )
 
-            if v_end_inc:
-                if not v <= tuple(map(int, v_end_inc.split("."))):
-                    continue
+            if lower_ok and upper_ok:
+                logger.warning("[CVE_EXECUTOR]: DEBUG single match true")
+                return True
 
-            if v_end_exc:
-                if not v < tuple(map(int, v_end_exc.split("."))):
-                    continue
-
-            return True
-
-        # Range of versions (e.g. "8.3.0 - 8.3.7")
+        # -------------------------
+        # RANGE VERSION
+        # -------------------------
         elif detected_version["type"] == "range":
             vmin = detected_version["min"]
             vmax = detected_version["max"]
 
-            # Intersection between ranges
-            if v_start_inc and vmax < tuple(map(int, v_start_inc.split("."))):
-                continue
+            lower_ok = (start_inc is None or vmax >= start_inc) and (
+                start_exc is None or vmax > start_exc
+            )
 
-            if v_start_exc and vmax <= tuple(map(int, v_start_exc.split("."))):
-                continue
+            upper_ok = (end_inc is None or vmin <= end_inc) and (
+                end_exc is None or vmin < end_exc
+            )
 
-            if v_end_inc and vmin > tuple(map(int, v_end_inc.split("."))):
-                continue
+            if lower_ok and upper_ok:
+                logger.warning("[CVE_EXECUTOR]: DEBUG range match true")
+                return True
 
-            if v_end_exc and vmin >= tuple(map(int, v_end_exc.split("."))):
-                continue
-
-            return True
-
+    logger.warning("[CVE_EXECUTOR]: DEBUG no matches")
     return False
