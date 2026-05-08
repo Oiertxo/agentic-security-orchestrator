@@ -55,4 +55,4 @@ remove-network:
 
 	
 next:
-	python3 lift_services.py
+	python.exe ./services/vulhub_tests/create_services.py
