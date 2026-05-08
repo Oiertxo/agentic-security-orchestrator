@@ -4,9 +4,10 @@ from langgraph.graph import END, StateGraph
 from src.state import AgentState
 
 from .recon_executor import recon_executor_node
+from .recon_http import recon_http_node
 from .recon_planner import recon_planner_node
 
-MAX_STEPS = 40
+MAX_STEPS = 400
 
 
 @observe(name="Recon subgraph")
@@ -15,6 +16,7 @@ def build_recon_subgraph():
 
     graph.add_node("recon_planner", recon_planner_node)
     graph.add_node("recon_executor", recon_executor_node)
+    graph.add_node("recon_http", recon_http_node)
 
     graph.set_entry_point("recon_planner")
 
@@ -25,6 +27,10 @@ def build_recon_subgraph():
             return "finish"
         return "recon_executor"
 
+    def route_from_executor(state: AgentState):
+        next_step = state.get("next_step", "planner")
+        return next_step
+
     graph.add_conditional_edges(
         "recon_planner",
         route_from_planner,
@@ -34,7 +40,16 @@ def build_recon_subgraph():
         },
     )
 
-    graph.add_edge("recon_executor", "recon_planner")
+    graph.add_conditional_edges(
+        "recon_executor",
+        route_from_executor,
+        {
+            "http": "recon_http",
+            "planner": "recon_planner",
+        },
+    )
+
+    graph.add_edge("recon_http", "recon_planner")
 
     return graph.compile()
 

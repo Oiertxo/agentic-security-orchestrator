@@ -9,7 +9,7 @@ from langfuse import observe
 
 from src.logger import logger
 from src.state import AgentState, PortMap, ReconState, ServiceMeta
-from src.subgraphs.recon.recon_executor_client import call_curl, call_recon_engine
+from src.subgraphs.recon.recon_executor_client import call_recon_engine
 from src.utils.utils import (
     derive_pending_hosts,
     merge_port_map,
@@ -20,6 +20,52 @@ from src.utils.utils import (
 
 OPENAPI_VERSION_RE = re.compile(r'"version"\s*:\s*"([^"]+)"')
 OPENAPI_TITLE_RE = re.compile(r'"title"\s*:\s*"([^"]+)"')
+COMMON_HTTP_PATHS = [
+    "/",
+    "/login",
+    "/logout",
+    "/signin",
+    "/auth",
+    "/admin",
+    "/administrator",
+    "/manage",
+    "/panel",
+    "/dashboard",
+    "/manager",
+    "/manager/html",
+    "/host-manager",
+    "/console",
+    "/actuator",
+    "/actuator/health",
+    "/actuator/info",
+    "/actuator/env",
+    "/api",
+    "/api/v1",
+    "/api/v2",
+    "/rest",
+    "/openapi.json",
+    "/swagger",
+    "/swagger-ui",
+    "/swagger-ui.html",
+    "/v2/api-docs",
+    "/v3/api-docs",
+    "/wp-admin",
+    "/wp-login.php",
+    "/wp-json",
+    "/user/login",
+    "/sites",
+    "/index.php",
+    "/debug",
+    "/status",
+    "/health",
+    "/metrics",
+    "/config",
+    "/env",
+    "/info",
+    "/robots.txt",
+    "/.env",
+    "/.git",
+]
 
 
 @observe(name="Recon executor")
@@ -36,6 +82,7 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
         return {
             **state,
             "recon": {
+                **recon_state,
                 "step_count": new_step,
                 "port_map": recon_state.get("port_map", {}),
                 "scanned_hosts": recon_state.get("scanned_hosts", []),
@@ -88,7 +135,11 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
                     new_scanned.append(target)
 
     # HTTP lookup
-    new_port_map = await openapi_http_lookup(new_port_map)
+    http_service = any(
+        is_http_service(meta)
+        for ports in new_port_map.values()
+        for meta in ports.values()
+    )
 
     new_pending = derive_pending_hosts(new_port_map, new_scanned)
     logger.info(f"[RECON_EXECUTOR] Recon engine result: {summary}")
@@ -102,7 +153,11 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
         "pending_hosts": new_pending,
     }
 
-    return {**state, "recon": updated_recon, "next_step": "planner"}
+    return {
+        **state,
+        "recon": updated_recon,
+        "next_step": "http" if http_service else "planner",
+    }
 
 
 def parse_nmap_xml(xml_str: str) -> Dict[str, Any]:
@@ -180,49 +235,22 @@ def parse_nmap_xml(xml_str: str) -> Dict[str, Any]:
     }
 
 
-async def openapi_http_lookup(
-    port_map: Dict[str, Dict[int, ServiceMeta]],
-) -> Dict[str, Dict[int, ServiceMeta]]:
-    """
-    - Detect HTTP services in port_map
-    - Try to get info of OpenAPI with a curl to openapi.json
-    - Extract title/version
-    """
+def is_http_service(meta: ServiceMeta) -> bool:
+    name = (meta.get("name") or "").lower()
+    product = (meta.get("product") or "").lower()
 
-    for ip, ports in port_map.items():
-        for port, meta in ports.items():
-            service_name = (meta.get("name") or "").lower()
-            product = (meta.get("product") or "").lower()
+    if name in {"http", "https"}:
+        return True
 
-            # Try to get OpenAPI info
-            if service_name == "http" or "http" in product:
-                url = f"http://{ip}:{port}/openapi.json"
+    http_indicators = [
+        "http",
+        "apache",
+        "nginx",
+        "tomcat",
+        "jetty",
+        "spring",
+        "caddy",
+        "iis",
+    ]
 
-                logger.info(f"[HTTP_LOOKUP] Probing OpenAPI at {url}")
-
-                try:
-                    result = await call_curl(
-                        url=url,
-                        method="GET",
-                        timeout=10.0,
-                    )
-                except Exception as e:
-                    logger.warning(f"[HTTP_LOOKUP] Error probing {url}: {e}")
-                    continue
-
-                logger.info(f"[HTTP_LOOKUP] Result: {result}")
-                stdout = (result.get("response") or {}).get("stdout", "")
-                if not stdout or '"openapi"' not in stdout:
-                    continue
-
-                # Extract title / version
-                title_match = OPENAPI_TITLE_RE.search(stdout)
-                version_match = OPENAPI_VERSION_RE.search(stdout)
-
-                if title_match:
-                    meta["product"] = title_match.group(1)
-
-                if version_match:
-                    meta["version"] = version_match.group(1)
-
-    return port_map
+    return any(indicator in product.lower() for indicator in http_indicators)

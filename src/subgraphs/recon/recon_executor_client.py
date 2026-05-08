@@ -208,6 +208,7 @@ async def call_curl(
     headers: Optional[Dict[str, str]] = None,
     data: Optional[str] = None,
     follow_redirects: bool = True,
+    include_headers: bool = False,
     timeout: float = 20.0,
 ) -> Dict[str, Any]:
     """
@@ -223,17 +224,12 @@ async def call_curl(
         "headers": headers or {},
         "data": data,
         "follow_redirects": follow_redirects,
+        "include_headers": include_headers,
     }
 
     endpoint = f"{get_engine_url().rstrip('/')}/execute/curl"
 
-    logger.info(
-        "[WEB_RECON] Fetching URL with curl",
-        extra={
-            "url": url,
-            "method": method,
-        },
-    )
+    logger.info(f"[WEB_RECON] Fetching URL with curl: {method} {url}")
 
     return await _post_with_retries(
         url=endpoint,
