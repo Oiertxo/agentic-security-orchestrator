@@ -4,7 +4,7 @@ from pathlib import Path
 
 # --- CONFIG ---
 BASE_DIR = Path(__file__).resolve().parent
-VULHUB_DIR = (BASE_DIR / "../../../vulhub").resolve()
+VULHUB_DIR = (BASE_DIR / "containers").resolve()
 STATE_FILE = (BASE_DIR / "state.json").resolve()
 EXCLUDED_DIRS = {".github", ".claude"}
 # ----------------
