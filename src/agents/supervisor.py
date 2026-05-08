@@ -1,5 +1,6 @@
 from typing import Any, Dict
 
+from langchain_community.callbacks import get_openai_callback
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
@@ -9,7 +10,7 @@ from src.logger import logger
 from src.model import get_model
 from src.schemas import SupervisorSchema
 from src.state import AgentState
-from src.utils.utils import load_prompt, supervisor_state_view
+from src.utils.utils import load_prompt, supervisor_state_view, update_state_tokens
 
 
 @observe(name="Supervisor node")
@@ -37,7 +38,14 @@ async def supervisor_node(state: AgentState, config: RunnableConfig) -> AgentSta
         output_type=SupervisorSchema,
     )
 
-    raw_response = await chain.ainvoke(supervisor_input, config=config)
+    with get_openai_callback() as cb:
+        raw_response = await chain.ainvoke(supervisor_input, config=config)
+
+    # Update tokens
+    state_tokens, new_tokens = update_state_tokens(cb, state)
+    state["tokens"]["token_count"] = state_tokens
+    state["tokens"]["events"].append(new_tokens)
+
     response: SupervisorSchema = SupervisorSchema.model_validate(raw_response)
 
     logger.info(f"[SUPERVISOR] Supervisor Planner response: {response}")

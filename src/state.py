@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, TypedDict
+from typing import Any, Dict, List, Literal, Optional, Required, TypedDict
 
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
@@ -10,6 +10,16 @@ class ServiceMeta(TypedDict, total=False):
     version: Optional[str]
     extrainfo: Optional[str]
     ostype: Optional[str]
+    # Web
+    app_name: str
+    app_version: str
+    headers: Dict[str, str]
+    cookies: Dict[str, str]
+    title: Optional[str]
+    frameworks: list[str]
+    http_paths: Dict[str, int]
+    js_files: List[str]
+    js_findings: Dict
 
 
 PortMap = Dict[str, Dict[int, ServiceMeta]]
@@ -44,6 +54,19 @@ class WebNode(TypedDict, total=False):
     children: Dict[str, "WebNode"]
 
 
+class TokenCount(TypedDict):
+    prompt_tokens: int
+    prompt_tokens_cached: int
+    completion_tokens: int
+    reasoning_tokens: int
+    total_tokens: int
+
+
+class TokenState(TypedDict):
+    token_count: TokenCount
+    events: List[TokenCount]
+
+
 class ReconState(TypedDict, total=False):
     planner: PlannerOutput
     results: List[dict]
@@ -53,6 +76,7 @@ class ReconState(TypedDict, total=False):
     web_intel: Dict[str, WebNode]
     finished: bool
     step_count: int
+    tokens: Required[TokenState]
 
 
 class CveState(TypedDict, total=False):
@@ -60,6 +84,7 @@ class CveState(TypedDict, total=False):
     results: List[dict]
     pending_services_for_cve: Dict[str, List[int]]
     analyzed_services_for_cve: Dict[str, List[int]]
+    skipped_services_for_cve: Dict[str, List[int]]
     finished: bool
     step_count: int
     vulnerabilities: Dict[str, List[Dict[str, Any]]]
@@ -112,23 +137,16 @@ class ExploitState(TypedDict, total=False):
     # Global results
     compromised_targets: Dict[str, Dict[str, Any]]
     results: List[Dict]
+    tokens: Required[TokenState]
 
 
-class AgentStateRequired(TypedDict):
+class AgentState(TypedDict):
     user_target: str
     messages: list[BaseMessage]
     next_step: str
-
-
-class AgentStateOptional(TypedDict, total=False):
+    tokens: Required[TokenState]
     recon: ReconState
     cve: CveState
     vuln_map: VulnMapState
     exploit: ExploitState
     report_finished: bool
-
-
-class AgentState(AgentStateOptional, AgentStateRequired):
-    """Single global state with optional namespaced branches."""
-
-    pass

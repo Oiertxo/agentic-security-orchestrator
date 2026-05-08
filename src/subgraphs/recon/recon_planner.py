@@ -12,16 +12,16 @@ from src.model import get_model
 from src.schemas import PlannerSchema
 from src.state import AgentState, PlannerOutput, ReconState
 from src.utils.toon_formatter import port_map_to_toon
-from src.utils.utils import load_prompt
+from src.utils.utils import load_prompt, update_state_tokens
 
 
 @observe(name="Recon planner")
 async def recon_planner_node(state: AgentState, config: RunnableConfig) -> AgentState:
     llm = get_model()
     system_prompt = load_prompt("recon.txt")
-    recon_state = state.get("recon", {})
+    recon_state: ReconState = state["recon"]
 
-    logger.info(f"[RECON_PLANNER] State received: {state}")
+    logger.info("[RECON_PLANNER] Entering Recon planner")
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -68,9 +68,10 @@ async def recon_planner_node(state: AgentState, config: RunnableConfig) -> Agent
     with get_openai_callback() as cb:
         raw_result = await chain.ainvoke(planner_input, config=config)
 
-    tokens = cb.total_tokens
-
-    logger.info(f"[RECON_PLANNER] Callback: {cb}")
+    # Update tokens
+    state_tokens, new_tokens = update_state_tokens(cb, recon_state)
+    recon_state["tokens"]["token_count"] = state_tokens
+    recon_state["tokens"]["events"].append(new_tokens)
 
     result = PlannerSchema.model_validate(raw_result)
     data = result.model_dump(mode="json")
@@ -91,7 +92,7 @@ async def recon_planner_node(state: AgentState, config: RunnableConfig) -> Agent
         "arguments": data.get("arguments", {}),
     }
     new_recon: ReconState = {
-        **state.get("recon", {}),
+        **recon_state,
         "planner": new_planner,
         "finished": is_finished,
     }
