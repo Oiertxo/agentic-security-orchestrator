@@ -17,6 +17,11 @@ MAX_RESULTS_PER_PAGE = 200
 MAX_TOTAL_RESULTS = 400
 HTTP_TIMEOUT = 20
 
+MAX_RETRIES = 5
+BACKOFF_BASE = 1.5
+BACKOFF_MAX = 30.0
+RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+
 
 class ReconRequest(BaseModel):
     next_tool: str = Field(..., description="nmap | dig")
@@ -26,6 +31,7 @@ class ReconRequest(BaseModel):
 
 class CveLookupRequest(BaseModel):
     # Structured fingerprint fields (from recon port_map)
+    name: str = Field(..., min_length=1, max_length=100, description="e.g., activemq")
     product: str = Field(..., min_length=1, max_length=100, description="e.g., OpenSSH")
     version: Optional[str] = Field(
         default=None, max_length=200, description="e.g., 8.9p1 Ubuntu 3ubuntu0.13"
@@ -150,7 +156,6 @@ def _extract_cve_summary(vuln: dict[str, Any]) -> dict[str, Any]:
 
             configurations.append(
                 {
-                    "criteria": match.get("criteria"),
                     "versionStartIncluding": match.get("versionStartIncluding"),
                     "versionStartExcluding": match.get("versionStartExcluding"),
                     "versionEndIncluding": match.get("versionEndIncluding"),
