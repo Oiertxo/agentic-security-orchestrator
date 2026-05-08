@@ -51,7 +51,7 @@ def analyze_entry(entry: str) -> dict:
                 break
 
             edb_id = exp.get("EDB-ID")
-            if not edb_id or edb_id in seen_edb_ids:
+            if not edb_id or edb_id in seen_edb_ids or ".py" not in exp.get("Path"):
                 continue
 
             if exp.get("Verified", False):
@@ -61,25 +61,6 @@ def analyze_entry(entry: str) -> dict:
                         "title": exp.get("Title"),
                         "edb_id": edb_id,
                         "verified": True,
-                        "path": exp.get("Path"),
-                    }
-                )
-
-        for exp in results:
-            if len(exploits) >= MAX_EXPLOITS_PER_VULN:
-                break
-
-            edb_id = exp.get("EDB-ID")
-            if not edb_id or edb_id in seen_edb_ids:
-                continue
-
-            if not exp.get("Verified", False):
-                seen_edb_ids.add(edb_id)
-                exploits.append(
-                    {
-                        "title": exp.get("Title"),
-                        "edb_id": edb_id,
-                        "verified": False,
                         "path": exp.get("Path"),
                     }
                 )
@@ -97,6 +78,7 @@ def main():
     lines = Path(INPUT_FILE).read_text(errors="ignore").splitlines()
 
     current_section = None
+    total_exploits = 0
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as out:
         for line in lines:
@@ -140,8 +122,11 @@ def main():
                     f"  {exp['title']}\n"
                     f"  {exp['path']}\n"
                 )
+                total_exploits += 1
 
             out.write("\n")
+
+        out.write("\n\n\n" + "=" * 80 + f"\n\nTotal exploit count: {total_exploits}")
 
     print(f"[+] Results saved to {OUTPUT_FILE}")
 
