@@ -6,7 +6,7 @@ from src.state import AgentState
 from .vuln_map_executor import vuln_map_executor_node
 from .vuln_map_planner import vuln_map_planner_node
 
-MAX_STEPS = 40
+MAX_STEPS = 400
 
 
 @observe(name="Vuln Map subgraph")

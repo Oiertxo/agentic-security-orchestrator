@@ -19,7 +19,7 @@ async def vuln_map_planner_node(
     port_map = recon_state.get("port_map", {})
     vuln_map_state = state.get("vuln_map", {})
 
-    logger.info(f"[VULN_MAP_PLANNER] State received: {state}")
+    logger.info("[VULN_MAP_PLANNER] Entering Vuln map planner")
 
     pending: dict[str, dict[int, list[str]]] = vuln_map_state.get(
         "pending_services_for_search", {}

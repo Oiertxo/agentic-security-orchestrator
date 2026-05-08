@@ -17,7 +17,7 @@ from src.utils.utils import parse_as_json
 async def vuln_map_executor_node(
     state: AgentState, config: RunnableConfig
 ) -> AgentState:
-    logger.info(f"[VULN_MAP_EXECUTOR] Received state: {state}")
+    logger.info("[VULN_MAP_EXECUTOR] Entering Vuln map executor")
     old_vuln_map = state.get("vuln_map", {})
     new_step = int(old_vuln_map.get("step_count", 0)) + 1
     found_map = {k: dict(v) for k, v in old_vuln_map.get("found_exploits", {}).items()}

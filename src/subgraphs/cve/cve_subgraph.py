@@ -6,7 +6,7 @@ from src.state import AgentState
 from .cve_executor import cve_executor_node
 from .cve_planner import cve_planner_node
 
-MAX_STEPS = 40
+MAX_STEPS = 400
 
 
 @observe(name="CV subgraph")
