@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from src.graph import compile_workflow
 from src.logger import logger
 from src.model import get_model
+from src.state import AgentState
 from src.utils.toon_formatter import get_minimal_toon_context
 
 load_dotenv()
@@ -33,6 +34,9 @@ os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 memory: Optional[AsyncSqliteSaver] = None
 security_graph: Optional[CompiledStateGraph] = None
 
+INTERRUPTS_ENABLED = os.getenv("ENABLE_INTERRUPTS", "true").lower() == "true"
+print("INTERRUPTS_ENABLED: ", INTERRUPTS_ENABLED)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,7 +44,10 @@ async def lifespan(app: FastAPI):
     try:
         async with AsyncSqliteSaver.from_conn_string(DB_PATH) as saver:
             memory = saver
-            security_graph = compile_workflow(checkpointer=memory)
+            security_graph = compile_workflow(
+                checkpointer=memory,
+                interrupts_enabled=INTERRUPTS_ENABLED,
+            )
             logger.info("[MAIN] DB and Graph ready")
             yield
     finally:
@@ -75,7 +82,7 @@ async def chat_endpoint(request: UserRequest):
 
     config: RunnableConfig = {
         "configurable": {"thread_id": thread_id, "start_time": str(time.time())},
-        "recursion_limit": 100,
+        "recursion_limit": 1000,
         "callbacks": [langfuse_handler],
     }
 
@@ -426,14 +433,47 @@ async def run_graph_stream(input_data, config, thread_id):
 
 
 async def start_fresh_audit_stream(query, config, thread_id):
-    initial_state = {
+    initial_state: AgentState = {
         "user_target": "",
         "messages": [HumanMessage(content=query)],
         "next_step": "supervisor",
-        "recon": {},
+        "recon": {
+            "tokens": {
+                "token_count": {
+                    "prompt_tokens": 0,
+                    "prompt_tokens_cached": 0,
+                    "completion_tokens": 0,
+                    "reasoning_tokens": 0,
+                    "total_tokens": 0,
+                },
+                "events": [],
+            },
+        },
         "cve": {},
         "vuln_map": {},
-        "exploit": {},
+        "exploit": {
+            "tokens": {
+                "token_count": {
+                    "prompt_tokens": 0,
+                    "prompt_tokens_cached": 0,
+                    "completion_tokens": 0,
+                    "reasoning_tokens": 0,
+                    "total_tokens": 0,
+                },
+                "events": [],
+            },
+        },
+        "tokens": {
+            "token_count": {
+                "prompt_tokens": 0,
+                "prompt_tokens_cached": 0,
+                "completion_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 0,
+            },
+            "events": [],
+        },
+        "report_finished": False,
     }
     async for chunk in run_graph_stream(initial_state, config, thread_id):
         yield chunk
