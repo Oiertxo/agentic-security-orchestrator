@@ -214,6 +214,7 @@ def _nvd_keyword_search(resultsPerPage, keyword: str, max_results: int) -> dict:
             )
 
         data = r.json()
+        logger.warning(f"[CVE_RESPONSE] Raw: {data}")
         vulns = data.get("vulnerabilities", [])
         if not vulns:
             break

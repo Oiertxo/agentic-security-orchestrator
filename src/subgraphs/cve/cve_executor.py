@@ -24,8 +24,6 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
 
     plan = state["cve"].get("planner", {})
 
-    logger.info(f"[CVE_EXECUTOR] Plan: {plan}")
-
     if not plan:
         return {
             **state,
@@ -33,7 +31,7 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
             "cve": {
                 **old_cve,
                 "results": (old_cve.get("results", []))
-                + [{"ok": False, "error": "Emply plan"}],
+                + [{"ok": False, "error": "Empty plan"}],
                 "step_count": new_step,
             },
             "next_step": "planner",
@@ -45,54 +43,60 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
 
     engine_result = await call_cve_lookup(plan=plan)
 
-    logger.info(f"[CVE_EXECUTOR] Engine_result: {engine_result}")
-
     if engine_result.get("ok"):
         response = engine_result.get("response", {})
         items = response.get("items", [])
-
         detected_version = normalize_version(args.get("version"))
 
+        # 1. Filter applicable items
         applicable_items = [
             item for item in items if is_cve_applicable(item, detected_version)
         ]
 
-        filtered_items = [
-            item
-            for item in applicable_items
-            if (item.get("cvss_v31_base") and item["cvss_v31_base"] >= 8.0)
-            or (item.get("cvss_v30_base") and item["cvss_v30_base"] >= 8.0)
-            or (item.get("cvss_v2_base") and item["cvss_v2_base"] >= 8.0)
-        ]
+        # 2. Filter by threshold and calculate scores
+        filtered_items = []
+        for item in applicable_items:
+            scores = [
+                item.get("cvss_v31_base"),
+                item.get("cvss_v30_base"),
+                item.get("cvss_v2_base"),
+            ]
+            max_score = max(filter(None, scores), default=0)
+            
+            if max_score >= 8.0:
+                item["calculated_max_cvss"] = max_score
+                item["severity_label"] = get_cvss_severity(scores)
+                filtered_items.append(item)
 
-        for item in filtered_items:
-            item["calculated_max_cvss"] = max(
-                filter(
-                    None,
-                    [
-                        item.get("cvss_v31_base"),
-                        item.get("cvss_v30_base"),
-                        item.get("cvss_v2_base"),
-                    ],
-                ),
-                default=0,
-            )
-            item["severity_label"] = get_cvss_severity(
-                [
-                    item.get("cvss_v31_base"),
-                    item.get("cvss_v30_base"),
-                    item.get("cvss_v2_base"),
-                ]
-            )
+        # 3. SORTING LOGIC: Severity (Calculated CVSS) DESC, then Recency (CVE ID) DESC
+        def sort_key(x):
+            severity = x.get("calculated_max_cvss", 0)
+            
+            # Recency: Extract (Year, ID) from 'CVE-2017-12635' -> (2017, 12635)
+            cve_str = x.get("cve_id", "CVE-1970-0")
+            parts = cve_str.split('-')
+            try:
+                year = int(parts[1])
+                seq = int(parts[2])
+            except (IndexError, ValueError):
+                year, seq = 0, 0
+                
+            return (severity, year, seq)
 
-        # Update vulnerabilities
+        # We sort descending (highest severity and newest year first)
+        filtered_items.sort(key=sort_key, reverse=True)
+
+        # 4. Limit to top candidates for exploitation mapping
+        # We increase the buffer to 20 to ensure we find at least 10 actual exploits later
+        final_candidates = filtered_items[:20]
+
+        # Update vulnerabilities state
         service_key = f"{target_ip}:{target_port}" if target_port else target_ip
         existing_vulns = current_vulnerabilities.get(service_key, [])
         existing_ids = {v.get("cve_id") for v in existing_vulns}
-        new_vulns = [v for v in filtered_items if v.get("cve_id") not in existing_ids]
+        new_vulns = [v for v in final_candidates if v.get("cve_id") not in existing_ids]
         current_vulnerabilities[service_key] = existing_vulns + new_vulns
 
-        # Update lists
         if target_ip and target_port:
             if target_ip not in new_analyzed_services_for_cve:
                 new_analyzed_services_for_cve[target_ip] = []
@@ -103,8 +107,8 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
             "ok": True,
             "tool": "cve_lookup",
             "target": service_key,
-            "count": len(filtered_items),
-            "top_cves": [x.get("cve_id") for x in filtered_items[:5]],
+            "count": len(final_candidates),
+            "top_cves": [x.get("cve_id") for x in final_candidates[:5]],
         }
     else:
         summary = {
@@ -115,22 +119,11 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
 
     port_map = state.get("recon", {}).get("port_map", {})
     pending_services_for_cve = {}
-
     for ip, ports in port_map.items():
         analyzed_cve_ip = new_analyzed_services_for_cve.get(ip, [])
-
         for port, info in ports.items():
-            product = info.get("product")
-            version = info.get("version")
-
-            if product and version:
-                if port not in analyzed_cve_ip:
-                    pending_services_for_cve.setdefault(ip, []).append(port)
-
-    logger.info(f"[CVE_EXECUTOR] Result summary: {summary}")
-    logger.info(
-        f"[CVE_EXECUTOR] Pending services for CVE lookup: {sum(len(p) for p in pending_services_for_cve.values())}"
-    )
+            if info.get("product") and info.get("version") and port not in analyzed_cve_ip:
+                pending_services_for_cve.setdefault(ip, []).append(port)
 
     updated_cve: CveState = {
         **old_cve,
@@ -144,21 +137,18 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
 
     return {
         **state,
-        "user_target": state.get("user_target"),
         "cve": updated_cve,
         "next_step": "planner",
     }
 
-
 def _parse_version_tuple(v: str) -> Optional[Tuple[int, ...]]:
-    parts = v.split(".")
-    nums = []
-    for p in parts:
-        if not p.isdigit():
-            return None
-        nums.append(int(p))
-    return tuple(nums)
-
+    if not v: return None
+    clean_v = re.sub(r'[^0-9.]', '', v).strip('.')
+    parts = clean_v.split(".")
+    try:
+        return tuple(int(p) for p in parts if p.isdigit())
+    except ValueError:
+        return None
 
 def normalize_version(raw_version: Optional[str]) -> Dict[str, Any]:
     """
@@ -244,7 +234,7 @@ def is_cve_applicable(item: Dict, detected_version: Dict) -> bool:
         ):
             continue
 
-        # Parsear límites (None si no existen)
+        # Parse limits
         start_inc = (
             _parse_version_tuple(cfg["versionStartIncluding"])
             if cfg.get("versionStartIncluding")
