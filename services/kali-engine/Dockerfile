@@ -64,7 +64,10 @@ RUN apt-get update && \
     && sort -o /usr/share/wordlists/metasploit/unix_passwords.txt /usr/share/wordlists/metasploit/unix_passwords.txt \
     && sed -i '1000i msfadmin' /usr/share/wordlists/rockyou.txt \
     && update-ca-certificates \
-    && GIT_SSL_NO_VERIFY=true git clone --depth 1 https://gitlab.com/exploit-database/exploitdb /opt/exploitdb \
+    && git config --global http.postBuffer 1048576000 \
+    && git config --global http.lowSpeedLimit 0 \
+    && git config --global http.lowSpeedTime 9999 \
+    && GIT_SSL_NO_VERIFY=true git clone --depth 1 https://gitlab.com/exploit-database/exploitdb.git /opt/exploitdb \
     && ln -sf /opt/exploitdb/searchsploit /usr/local/bin/searchsploit \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
