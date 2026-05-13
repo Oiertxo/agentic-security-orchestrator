@@ -6,35 +6,35 @@ from src.state import AgentState
 from .vuln_map_executor import vuln_map_executor_node
 from .vuln_map_planner import vuln_map_planner_node
 
-MAX_STEPS = 40
+MAX_STEPS = 400
 
 
 @observe(name="Vuln Map subgraph")
 def build_vuln_map_subgraph():
     graph = StateGraph(AgentState)
 
-    graph.add_node("planner", vuln_map_planner_node)
-    graph.add_node("executor", vuln_map_executor_node)
+    graph.add_node("vuln_map_planner", vuln_map_planner_node)
+    graph.add_node("vuln_map_executor", vuln_map_executor_node)
 
-    graph.set_entry_point("planner")
+    graph.set_entry_point("vuln_map_planner")
 
     def route_from_planner(state: AgentState):
         step = int((state.get("vuln_map", {})).get("step_count", 0))
         finished = (state.get("vuln_map", {})).get("finished", False)
         if finished or step >= MAX_STEPS:
             return "finish"
-        return "executor"
+        return "vuln_map_executor"
 
     graph.add_conditional_edges(
-        "planner",
+        "vuln_map_planner",
         route_from_planner,
         {
             "finish": END,
-            "executor": "executor",
+            "vuln_map_executor": "vuln_map_executor",
         },
     )
 
-    graph.add_edge("executor", "planner")
+    graph.add_edge("vuln_map_executor", "vuln_map_planner")
 
     return graph.compile()
 

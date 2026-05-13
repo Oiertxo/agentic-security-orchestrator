@@ -83,10 +83,11 @@ async def _post_with_retries(
                 try:
                     data = resp.json()
                     if data:
-                        logger.info(
-                            f"[RECON_EXECUTOR_CLIENT] Response: {data['next_tool'], data['target'], data['options']}"
-                        )
-                except Exception:
+                        logger.info(f"[RECON_EXECUTOR_CLIENT] Response: {data}")
+                except Exception as e:
+                    logger.error(
+                        f"[RECON_EXECUTOR_CLIENT] Error while parsing data: {e}"
+                    )
                     data = {}
 
                 if resp.status_code < 400:
@@ -207,13 +208,14 @@ async def call_curl(
     headers: Optional[Dict[str, str]] = None,
     data: Optional[str] = None,
     follow_redirects: bool = True,
-    timeout: float = 600.0,
+    include_headers: bool = False,
+    timeout: float = 20.0,
 ) -> Dict[str, Any]:
     """
     Call Kali Engine curl executor.
 
     Expected executor endpoint:
-        POST /web/curl
+        POST /execute/curl
     """
 
     payload = {
@@ -222,17 +224,12 @@ async def call_curl(
         "headers": headers or {},
         "data": data,
         "follow_redirects": follow_redirects,
+        "include_headers": include_headers,
     }
 
-    endpoint = f"{get_engine_url().rstrip('/')}/web/curl"
+    endpoint = f"{get_engine_url().rstrip('/')}/execute/curl"
 
-    logger.info(
-        "[WEB_RECON] Fetching URL with curl",
-        extra={
-            "url": url,
-            "method": method,
-        },
-    )
+    logger.info(f"[WEB_RECON] Fetching URL with curl: {method} {url}")
 
     return await _post_with_retries(
         url=endpoint,

@@ -1,17 +1,16 @@
-import asyncio
 from typing import Any, Dict, Optional
 
 import httpx
 from langfuse import observe
 
-from src.logger import logger
+from src.state import PlannerOutput
 from src.utils.utils import get_engine_url
 
 
 def _normalize_cve_lookup_payload(
     *,
     args: Optional[Dict[str, Any]] = None,
-    plan: Optional[Dict[str, Any]] = None,
+    plan: PlannerOutput,
 ) -> Dict[str, Any]:
     """
     Normalizes either:
@@ -36,6 +35,7 @@ def _normalize_cve_lookup_payload(
         raise ValueError("Missing required 'product' (string) for cve_lookup.")
 
     payload: Dict[str, Any] = {
+        "name": arguments.get("name", ""),
         "product": product,
         "version": arguments.get("version"),
         "service": arguments.get("service"),
@@ -63,77 +63,48 @@ def _normalize_cve_lookup_payload(
 async def call_cve_lookup(
     *,
     args: Optional[Dict[str, Any]] = None,
-    plan: Optional[Dict[str, Any]] = None,
+    plan: PlannerOutput,
     base_url: Optional[str] = None,
-    timeout: float = 30.0,
-    retries: int = 2,
-    backoff_base: float = 0.5,
+    timeout: float = 120.0,
 ) -> Dict[str, Any]:
-    """
-    Calls the engine /cve_lookup endpoint using structured inputs.
-    Returns a consistent {ok, status_code, request, response, error} dict.
-    """
-    payload = _normalize_cve_lookup_payload(args=args, plan=plan)
 
+    payload = _normalize_cve_lookup_payload(args=args, plan=plan)
     base = (base_url or get_engine_url()).rstrip("/")
     url = f"{base}/cve_lookup"
 
-    last_exc: Optional[Exception] = None
-
     async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
-        for attempt in range(retries + 1):
+        try:
+            resp = await client.post(
+                url, json=payload, headers={"Content-Type": "application/json"}
+            )
+
             try:
-                resp = await client.post(
-                    url, json=payload, headers={"Content-Type": "application/json"}
-                )
-                try:
-                    data = resp.json()
-                except Exception:
-                    data = {}
+                data = resp.json()
+            except Exception:
+                data = {}
 
-                if isinstance(data, dict):
-                    count = data.get("count")
-                    logger.info(
-                        f"[CVE_EXECUTOR_CLIENT] CVE lookup ok={resp.status_code < 400} product={payload.get('product')} count={count}"
-                    )
-                    pass
+            return {
+                "ok": resp.status_code < 400,
+                "status_code": resp.status_code,
+                "request": payload,
+                "response": data,
+                "error": None if resp.status_code < 400 else data.get("detail"),
+            }
 
-                if resp.status_code < 400:
-                    return {
-                        "ok": True,
-                        "status_code": resp.status_code,
-                        "request": payload,
-                        "response": data,
-                        "error": None,
-                    }
+        except httpx.ReadTimeout:
+            return {
+                "ok": False,
+                "status_code": "timeout",
+                "request": payload,
+                "response": None,
+                "error": "Client timeout waiting for CVE lookup",
+            }
 
-                return {
-                    "ok": False,
-                    "status_code": resp.status_code,
-                    "request": payload,
-                    "response": data,
-                    "error": (
-                        data.get("detail")
-                        if isinstance(data, dict) and "detail" in data
-                        else f"HTTP {resp.status_code}"
-                    ),
-                }
-
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.HTTPError) as e:
-                last_exc = e
-                if attempt == retries:
-                    break
-                sleep_s = backoff_base * (2**attempt)
-                logger.warning(
-                    f"[CVE_EXECUTOR_CLIENT] Retrying cve search in {sleep_s}s... (Attempt {attempt + 1}/{retries})"
-                )
-                await asyncio.sleep(sleep_s)
-                attempt += 1
-
-    return {
-        "ok": False,
-        "status_code": None,
-        "request": payload,
-        "response": None,
-        "error": str(last_exc) if last_exc else "Unknown transport error",
-    }
+        except httpx.HTTPError as e:
+            return {
+                "ok": False,
+                "status_code": None,
+                "request": payload,
+                "response": None,
+                "error": str(e),
+            }

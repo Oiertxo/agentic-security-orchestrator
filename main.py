@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from src.graph import compile_workflow
 from src.logger import logger
 from src.model import get_model
+from src.state import AgentState
 from src.utils.toon_formatter import get_minimal_toon_context
 
 load_dotenv()
@@ -33,6 +34,9 @@ os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 memory: Optional[AsyncSqliteSaver] = None
 security_graph: Optional[CompiledStateGraph] = None
 
+INTERRUPTS_ENABLED = os.getenv("ENABLE_INTERRUPTS", "true").lower() == "true"
+print("INTERRUPTS_ENABLED: ", INTERRUPTS_ENABLED)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -40,7 +44,10 @@ async def lifespan(app: FastAPI):
     try:
         async with AsyncSqliteSaver.from_conn_string(DB_PATH) as saver:
             memory = saver
-            security_graph = compile_workflow(checkpointer=memory)
+            security_graph = compile_workflow(
+                checkpointer=memory,
+                interrupts_enabled=INTERRUPTS_ENABLED,
+            )
             logger.info("[MAIN] DB and Graph ready")
             yield
     finally:
@@ -75,7 +82,7 @@ async def chat_endpoint(request: UserRequest):
 
     config: RunnableConfig = {
         "configurable": {"thread_id": thread_id, "start_time": str(time.time())},
-        "recursion_limit": 100,
+        "recursion_limit": 1000,
         "callbacks": [langfuse_handler],
     }
 
@@ -400,32 +407,23 @@ async def run_graph_stream(input_data, config, thread_id):
     if security_graph is None:
         return
 
+    last_status_node = None
+
     async for event in security_graph.astream_events(
         input_data, config=config, version="v2"
     ):
         kind = event["event"]
-        name = event["name"]
-        metadata = event.get("metadata", {})
-        node_name = metadata.get("langgraph_node")
+        node_name = event.get("metadata", {}).get("langgraph_node")
 
-        if kind == "on_chain_start" and node_name:
-            yield f"data: {
-                json.dumps({'node': node_name, 'type': 'status', 'event': 'start'})
-            }\n\n"
+        if kind == "on_chat_model_stream":
+            chunk = event.get("data", {}).get("chunk")
+            if chunk and getattr(chunk, "content", None):
+                yield f"data: {json.dumps({'token': chunk.content})}\n\n"
 
-        elif kind == "on_chain_end" and node_name:
-            yield f"data: {
-                json.dumps({'node': node_name, 'type': 'status', 'event': 'end'})
-            }\n\n"
-
-        elif kind == "on_chat_model_stream":
-            data = event.get("data", {})
-            chunk = data.get("chunk")
-
-            if chunk and hasattr(chunk, "content"):
-                content = chunk.content
-                if content:
-                    yield f"data: {json.dumps({'token': content, 'type': 'content'})}\n\n"
+        elif kind not in ("on_chain_end",):
+            if node_name and node_name != last_status_node:
+                last_status_node = node_name
+                yield f"data: {json.dumps({'node': node_name})}\n\n"
 
     final_state = await security_graph.aget_state(config)
     if not final_state.next:
@@ -435,14 +433,47 @@ async def run_graph_stream(input_data, config, thread_id):
 
 
 async def start_fresh_audit_stream(query, config, thread_id):
-    initial_state = {
+    initial_state: AgentState = {
         "user_target": "",
         "messages": [HumanMessage(content=query)],
         "next_step": "supervisor",
-        "recon": {},
+        "recon": {
+            "tokens": {
+                "token_count": {
+                    "prompt_tokens": 0,
+                    "prompt_tokens_cached": 0,
+                    "completion_tokens": 0,
+                    "reasoning_tokens": 0,
+                    "total_tokens": 0,
+                },
+                "events": [],
+            },
+        },
         "cve": {},
         "vuln_map": {},
-        "exploit": {},
+        "exploit": {
+            "tokens": {
+                "token_count": {
+                    "prompt_tokens": 0,
+                    "prompt_tokens_cached": 0,
+                    "completion_tokens": 0,
+                    "reasoning_tokens": 0,
+                    "total_tokens": 0,
+                },
+                "events": [],
+            },
+        },
+        "tokens": {
+            "token_count": {
+                "prompt_tokens": 0,
+                "prompt_tokens_cached": 0,
+                "completion_tokens": 0,
+                "reasoning_tokens": 0,
+                "total_tokens": 0,
+            },
+            "events": [],
+        },
+        "report_finished": False,
     }
     async for chunk in run_graph_stream(initial_state, config, thread_id):
         yield chunk
@@ -461,7 +492,6 @@ async def format_graph_response(result, config, thread_id):
             "thread_id": thread_id,
         }
 
-    # El resultado del invoke asíncrono suele estar en el snapshot final
     last_message = (
         final_snapshot.values["messages"][-1].content
         if final_snapshot.values.get("messages")

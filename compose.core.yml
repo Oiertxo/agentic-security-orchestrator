@@ -45,9 +45,8 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      mgmt_net:
-      attack_net:
-        ipv4_address: 10.255.255.2
+      - mgmt_net
+      - attack_net
 
 networks:
   mgmt_net:
@@ -57,8 +56,4 @@ networks:
         - subnet: 10.255.254.0/24
 
   attack_net:
-    driver: bridge
-    internal: true
-    ipam:
-      config:
-        - subnet: 10.255.255.0/24
+    external: true

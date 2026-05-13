@@ -16,69 +16,88 @@ async def cve_planner_node(state: AgentState, config: RunnableConfig) -> AgentSt
     port_map = recon_state.get("port_map", {})
     pending = cve_state.get("pending_services_for_cve")
 
-    logger.info(f"[CVE_PLANNER] State received: {state}")
+    logger.info("[CVE_PLANNER] Entering CVE planner")
 
     # Initialization
-    if "pending_services_for_cve" not in cve_state:
+    if pending is None:
         pending = {ip: list(ports.keys()) for ip, ports in port_map.items() if ports}
         cve_state["pending_services_for_cve"] = pending
         cve_state.setdefault("vulnerabilities", {})
+        cve_state.setdefault("analyzed_services_for_cve", {})
+        cve_state.setdefault("skipped_services_for_cve", {})
 
-    # Termination
-    if not pending or all(len(ports) == 0 for ports in pending.values()):
-        logger.info("[CVE_PLANNER] No pending services. Finishing CVE phase")
+    analyzed = cve_state.get("analyzed_services_for_cve", {})
+    skipped = cve_state.get("skipped_services_for_cve", {})
+
+    # MAIN LOOP
+    while pending:
+        ip = next(iter(pending))
+        port = pending[ip].pop(0)
+
+        # bookkeeping
+        analyzed.setdefault(ip, []).append(int(port))
+        if not pending[ip]:
+            pending.pop(ip)
+
+        service = port_map.get(ip, {}).get(port, {})
+        name = service.get("name")
+        product = service.get("product")
+        version = service.get("version")
+
+        # Not CVE-eligible: skip and continue loop
+        if not isinstance(product, str) or not product.strip():
+            logger.info(
+                f"[CVE_PLANNER] Skipping {ip}:{port} — insufficient fingerprint"
+            )
+            skipped.setdefault(ip, []).append(int(port))
+            continue
+
+        # CVE-eligible: plan lookup
+        logger.info(
+            f"[CVE_PLANNER] Selected {ip}:{port} ({name} {product} {version}) for CVE lookup"
+        )
+
+        planner_output: PlannerOutput = {
+            "next_tool": "cve_lookup",
+            "arguments": {
+                "target": ip,
+                "name": name,
+                "product": product,
+                "version": normalize_version(version),
+                "port": int(port),
+                "cve": None,
+            },
+        }
+
         return {
             **state,
             "cve": {
                 **cve_state,
-                "planner": {"next_tool": None, "arguments": {}},
-                "finished": True,
+                "pending_services_for_cve": pending,
+                "analyzed_services_for_cve": analyzed,
+                "skipped_services_for_cve": skipped,
+                "planner": planner_output,
+                "finished": False,
             },
             "messages": state.get("messages", [])
-            + [AIMessage(content=json.dumps({"finished": True}))],
-            "next_step": "supervisor",
+            + [AIMessage(content=json.dumps(planner_output))],
+            "next_step": "executor",
         }
 
-    ip = next(iter(pending.keys()))
-    port = pending[ip].pop(0)
-
-    # Cleanse
-    analyzed = cve_state.get("analyzed_services_for_cve", {})
-    ports = analyzed.setdefault(ip, [])
-    ports.append(int(port))
-    if not pending[ip]:
-        pending.pop(ip)
-
-    service = port_map.get(ip, {}).get(port, {})
-
-    product = service.get("product")
-    version = service.get("version")
-
-    logger.info(
-        f"[CVE_PLANNER] Selected {ip}:{port} ({product} {version}) for CVE lookup"
-    )
-
-    planner_output: PlannerOutput = {
-        "next_tool": "cve_lookup",
-        "arguments": {
-            "target": ip,
-            "product": product,
-            "version": normalize_version(version),
-            "port": int(port),
-            "cve": None,
-        },
-    }
+    # No pending services left
+    logger.info("[CVE_PLANNER] No CVE-eligible services remaining. Finishing CVE phase")
 
     return {
         **state,
         "cve": {
             **cve_state,
-            "pending_services_for_cve": pending,
+            "pending_services_for_cve": {},
             "analyzed_services_for_cve": analyzed,
-            "planner": planner_output,
-            "finished": False,
+            "skipped_services_for_cve": skipped,
+            "planner": {"next_tool": None, "arguments": {}},
+            "finished": True,
         },
         "messages": state.get("messages", [])
-        + [AIMessage(content=json.dumps(planner_output))],
-        "next_step": "executor",
+        + [AIMessage(content=json.dumps({"finished": True}))],
+        "next_step": "supervisor",
     }

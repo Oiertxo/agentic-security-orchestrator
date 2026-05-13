@@ -9,7 +9,7 @@ from src.agents.vuln_map_worker import vuln_map_worker_node
 from src.state import AgentState
 
 
-def compile_workflow(checkpointer):
+def compile_workflow(checkpointer, interrupts_enabled: bool = True):
     workflow = StateGraph(AgentState)
 
     workflow.add_node("supervisor", supervisor_node)
@@ -29,7 +29,8 @@ def compile_workflow(checkpointer):
             "cve": "cve",
             "vuln_map": "vuln_map",
             "exploit": "exploit",
-            "report": "report",
+            # "report": "report",
+            "report": END,
             "finish": END,
         },
     )
@@ -40,7 +41,14 @@ def compile_workflow(checkpointer):
     workflow.add_edge("exploit", "supervisor")
     workflow.add_edge("report", "supervisor")
 
-    return workflow.compile(
-        checkpointer=checkpointer,
-        interrupt_before=["recon", "cve", "vuln_map", "exploit"],
-    )
+    compile_kwargs = {"checkpointer": checkpointer}
+
+    if interrupts_enabled:
+        compile_kwargs["interrupt_before"] = [
+            "recon",
+            "cve",
+            "vuln_map",
+            "exploit",
+        ]
+
+    return workflow.compile(**compile_kwargs)

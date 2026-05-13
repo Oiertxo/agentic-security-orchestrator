@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any, Dict
 from xml.etree import ElementTree
 
@@ -17,6 +18,55 @@ from src.utils.utils import (
     was_version_scan,
 )
 
+OPENAPI_VERSION_RE = re.compile(r'"version"\s*:\s*"([^"]+)"')
+OPENAPI_TITLE_RE = re.compile(r'"title"\s*:\s*"([^"]+)"')
+COMMON_HTTP_PATHS = [
+    "/",
+    "/login",
+    "/logout",
+    "/signin",
+    "/auth",
+    "/admin",
+    "/administrator",
+    "/manage",
+    "/panel",
+    "/dashboard",
+    "/manager",
+    "/manager/html",
+    "/host-manager",
+    "/console",
+    "/actuator",
+    "/actuator/health",
+    "/actuator/info",
+    "/actuator/env",
+    "/api",
+    "/api/v1",
+    "/api/v2",
+    "/rest",
+    "/openapi.json",
+    "/swagger",
+    "/swagger-ui",
+    "/swagger-ui.html",
+    "/v2/api-docs",
+    "/v3/api-docs",
+    "/wp-admin",
+    "/wp-login.php",
+    "/wp-json",
+    "/user/login",
+    "/sites",
+    "/index.php",
+    "/debug",
+    "/status",
+    "/health",
+    "/metrics",
+    "/config",
+    "/env",
+    "/info",
+    "/robots.txt",
+    "/.env",
+    "/.git",
+]
+
 
 @observe(name="Recon executor")
 async def recon_executor_node(state: AgentState, config: RunnableConfig) -> AgentState:
@@ -32,6 +82,7 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
         return {
             **state,
             "recon": {
+                **recon_state,
                 "step_count": new_step,
                 "port_map": recon_state.get("port_map", {}),
                 "scanned_hosts": recon_state.get("scanned_hosts", []),
@@ -83,6 +134,13 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
                 ):
                     new_scanned.append(target)
 
+    # HTTP lookup
+    http_service = any(
+        is_http_service(meta)
+        for ports in new_port_map.values()
+        for meta in ports.values()
+    )
+
     new_pending = derive_pending_hosts(new_port_map, new_scanned)
     logger.info(f"[RECON_EXECUTOR] Recon engine result: {summary}")
     updated_recon: ReconState = {
@@ -95,7 +153,11 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
         "pending_hosts": new_pending,
     }
 
-    return {**state, "recon": updated_recon, "next_step": "planner"}
+    return {
+        **state,
+        "recon": updated_recon,
+        "next_step": "http" if http_service else "planner",
+    }
 
 
 def parse_nmap_xml(xml_str: str) -> Dict[str, Any]:
@@ -171,3 +233,24 @@ def parse_nmap_xml(xml_str: str) -> Dict[str, Any]:
         },
         "port_map": port_map,
     }
+
+
+def is_http_service(meta: ServiceMeta) -> bool:
+    name = (meta.get("name") or "").lower()
+    product = (meta.get("product") or "").lower()
+
+    if name in {"http", "https"}:
+        return True
+
+    http_indicators = [
+        "http",
+        "apache",
+        "nginx",
+        "tomcat",
+        "jetty",
+        "spring",
+        "caddy",
+        "iis",
+    ]
+
+    return any(indicator in product.lower() for indicator in http_indicators)

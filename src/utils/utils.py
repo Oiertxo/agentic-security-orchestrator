@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
-from src.state import AgentState, PortMap
+from src.state import AgentState, PortMap, TokenCount
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
 
@@ -252,38 +252,36 @@ def normalize_newlines_python(script: str) -> str:
     return script
 
 
-UPSTREAM_VERSION_RE: re.Pattern[str] = re.compile(
-    r"""
-    ^
-    (?P<version>
-        \d+(?:\.\d+)*          # 1.2.3
-        (?:[a-z]\d+)?          # 4.7p1 / 5.0.51a
-        (?:\s*-\s*[0-9X]+(?:\.[0-9X]+)*)?  # 3.X - 4.X
-    )
-    """,
-    re.IGNORECASE | re.VERBOSE,
-)
+VERSION_RE = re.compile(r"(\d+(?:\.\d+){0,3})")
 
 
 def normalize_version(raw: Optional[str]) -> Optional[str]:
-    if raw is None:
+    if not isinstance(raw, str):
         return None
 
     raw = raw.strip()
     if raw == "" or raw.lower() in {"-", "unknown", "n/a"}:
         return None
 
-    raw = re.split(
-        r"\s+(?:debian|ubuntu|redhat|centos|windows)\b",
-        raw,
-        flags=re.I,
-    )[0]
-
-    if raw is None:
-        return None
-
-    match = UPSTREAM_VERSION_RE.match(raw)
+    match = VERSION_RE.search(raw)
     if not match:
         return None
 
-    return match.group("version").strip()
+    return match.group(1)
+
+
+def update_state_tokens(callback, state):
+    new_tokens: TokenCount = {
+        "prompt_tokens": callback.prompt_tokens,
+        "prompt_tokens_cached": callback.prompt_tokens_cached,
+        "completion_tokens": callback.completion_tokens,
+        "reasoning_tokens": callback.reasoning_tokens,
+        "total_tokens": callback.total_tokens,
+    }
+
+    state_tokens: TokenCount = state["tokens"]["token_count"]
+
+    for k, v in new_tokens.items():
+        state_tokens[k] += v
+
+    return state_tokens, new_tokens

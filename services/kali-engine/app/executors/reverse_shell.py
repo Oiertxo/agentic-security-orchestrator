@@ -85,9 +85,9 @@ class TriggerReverseShellExecutor:
                 data = step.get("data", "")
                 encoding = step.get("encoding", "ascii")
 
-                if action == "expect":
+                if action == "recv":
                     recv_data = sock.recv(4096)
-                    logger.debug("[EXECUTOR] expect: %s", data)
+                    logger.debug("[EXECUTOR] recv: %s", data)
 
                     if not re.search(data.encode(encoding), recv_data):
                         sock.close()

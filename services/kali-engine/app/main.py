@@ -2,8 +2,12 @@ import base64
 import json
 import logging
 import os
+import random
+import re
 import shutil
 import subprocess
+import time
+from itertools import combinations
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict
 
@@ -20,15 +24,18 @@ from fastapi import FastAPI, HTTPException
 
 from utils import (
     ALLOWED_TOOLS,
+    BACKOFF_BASE,
+    BACKOFF_MAX,
     HTTP_TIMEOUT,
+    MAX_RETRIES,
     MAX_TOTAL_RESULTS,
     NVD_BASE_URL,
+    RETRY_STATUS_CODES,
     CveLookupRequest,
     ExploitRequest,
     FileUpdateRequest,
     ReconRequest,
     SearchsploitRequest,
-    _build_keyword_search,
     _extract_cve_summary,
     _nvd_headers,
     build_msf_module_path,
@@ -66,6 +73,8 @@ def run(req: ReconRequest):
 
     if req.next_tool == "nmap":
         ensure_nmap_options(req.options)
+        if "-sS" in req.options:
+            req.options.append("-p-")
         try:
             with open("/etc/nmap-exclude", "r") as f:
                 exclude_ips = f.read().strip()
@@ -112,16 +121,54 @@ def run(req: ReconRequest):
 def cve_lookup(req: CveLookupRequest):
     """
     Structured CVE lookup via NVD CVE API v2.0.
-    Uses keywordSearch + pagination (startIndex/resultsPerPage). [1](https://nvd.nist.gov/developers/vulnerabilities)
-    """
-    keyword = _build_keyword_search(req)
 
-    remaining = min(req.maxResults, MAX_TOTAL_RESULTS)
+    This endpoint performs an adaptive multi-keyword search:
+    - Generates keyword combinations from product and name
+    - Executes searches incrementally
+    - Selects keywords based on observed signal
+    - Deduplicates CVEs
+    - Version filtering is performed locally, not in NVD
+    """
+
+    logger.info(f"[CVE_LOOKUP] target={req.port} product={req.product} name={req.name}")
+
+    result = nvd_multi_keyword_search(
+        name=req.name,
+        product=req.product,
+        resultsPerPage=req.resultsPerPage,
+        max_results=req.maxResults,
+    )
+
+    return {
+        "query": {
+            "name": req.name,
+            "product": req.product,
+            "version": req.version,
+            "service": req.service,
+            "vendor": req.vendor,
+            "ostype": req.ostype,
+            "extrainfo": req.extrainfo,
+            "port": req.port,
+            "keywords_tested": result.get("keywords_tested"),
+            "signal": result.get("signal"),
+        },
+        "count": result["count"],
+        "items": result["items"],
+        "note": (
+            "Summarized CVE records from NVD CVE API v2.0. "
+            "Adaptive multi-keyword search without version constraints. "
+            "Final applicability must be validated locally."
+        ),
+    }
+
+
+def _nvd_keyword_search(resultsPerPage, keyword: str, max_results: int) -> dict:
+    remaining = min(max_results, MAX_TOTAL_RESULTS)
     start_index = 0
-    items: list[dict[str, Any]] = []
+    items: dict[str, dict] = {}
 
     while remaining > 0:
-        page_size = min(req.resultsPerPage, remaining)
+        page_size = min(resultsPerPage, remaining)
 
         params = {
             "keywordSearch": keyword,
@@ -129,31 +176,57 @@ def cve_lookup(req: CveLookupRequest):
             "startIndex": start_index,
         }
 
-        try:
-            logger.info(
-                f"CVE_LOOKUP: {NVD_BASE_URL}, {_nvd_headers()}, {params}, {HTTP_TIMEOUT}"
-            )
-            r = requests.get(
-                NVD_BASE_URL,
-                headers=_nvd_headers(),
-                params=params,
-                timeout=HTTP_TIMEOUT,
-            )
-        except requests.RequestException as e:
-            raise HTTPException(status_code=502, detail=f"NVD request failed: {e}")
+        attempt = 0
+        while True:
+            try:
+                r = requests.get(
+                    NVD_BASE_URL,
+                    headers=_nvd_headers(),
+                    params=params,
+                    timeout=HTTP_TIMEOUT,
+                )
+            except requests.RequestException as e:
+                if attempt >= MAX_RETRIES:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"NVD request failed after retries: {e}",
+                    )
+                _backoff_sleep(attempt)
+                attempt += 1
+                continue
 
-        if r.status_code != 200:
+            if r.status_code == 200:
+                break
+
+            if r.status_code in RETRY_STATUS_CODES:
+                if attempt >= MAX_RETRIES:
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"NVD returned {r.status_code} after retries: {r.text[:300]}",
+                    )
+                _backoff_sleep(attempt)
+                attempt += 1
+                continue
+
             raise HTTPException(
-                status_code=502, detail=f"NVD returned {r.status_code}: {r.text[:300]}"
+                status_code=502,
+                detail=f"NVD returned {r.status_code}: {r.text[:300]}",
             )
 
         data = r.json()
+        logger.warning(f"[CVE_RESPONSE] Raw: {data}")
         vulns = data.get("vulnerabilities", [])
         if not vulns:
             break
 
         for v in vulns:
-            items.append(_extract_cve_summary(v))
+            cve = _extract_cve_summary(v)
+            if (
+                (cve.get("cvss_v31_base") and cve["cvss_v31_base"] >= 8.0)
+                or (cve.get("cvss_v30_base") and cve["cvss_v30_base"] >= 8.0)
+                or (cve.get("cvss_v2_base") and cve["cvss_v2_base"] >= 8.0)
+            ):
+                items.setdefault(cve["cve_id"], cve)
 
         got = len(vulns)
         start_index += got
@@ -163,19 +236,74 @@ def cve_lookup(req: CveLookupRequest):
             break
 
     return {
-        "query": {
-            "product": req.product,
-            "version": req.version,
-            "service": req.service,
-            "vendor": req.vendor,
-            "ostype": req.ostype,
-            "extrainfo": req.extrainfo,
-            "port": req.port,
-            "keywordSearch": keyword,
-        },
+        "keyword": keyword,
         "count": len(items),
-        "items": items,
-        "note": "Summarized CVE records from NVD CVE API v2.0 (keyword search + pagination).",
+        "items": list(items.values()),
+    }
+
+
+def _backoff_sleep(attempt: int) -> None:
+    delay = min(BACKOFF_BASE * (2**attempt), BACKOFF_MAX)
+    jitter = random.uniform(0, delay * 0.2)
+    time.sleep(delay + jitter)
+
+
+def keyword_combinations(text: str, max_len: int = 3) -> list[str]:
+    tokens = [t.lower() for t in re.split(r"\W+", text) if t]
+
+    seen = set()
+    combos = []
+
+    for size in range(1, min(len(tokens), max_len) + 1):
+        for combo in combinations(tokens, size):
+            k = " ".join(combo)
+            if k not in seen:
+                seen.add(k)
+                combos.append(k)
+
+    return combos
+
+
+def nvd_multi_keyword_search(
+    *,
+    name: str | None,
+    product: str,
+    resultsPerPage: int,
+    max_results: int,
+    min_signal: int = 1,
+) -> dict:
+    keywords = []
+
+    if name:
+        keywords.append(name.lower())
+
+    keywords.extend(keyword_combinations(product))
+
+    all_items: dict[str, dict] = {}
+    signal: dict[str, int] = {}
+    executed: list[str] = []
+
+    for keyword in keywords:
+        result = _nvd_keyword_search(resultsPerPage, keyword, max_results)
+
+        executed.append(keyword)
+        signal[keyword] = result["count"]
+
+        if result["count"] < min_signal:
+            continue
+
+        for cve in result["items"]:
+            if cve["cve_id"] not in all_items:
+                cve["found_by"] = [keyword]
+                all_items[cve["cve_id"]] = cve
+            else:
+                all_items[cve["cve_id"]]["found_by"].append(keyword)
+
+    return {
+        "keywords_tested": executed,
+        "signal": signal,
+        "count": len(all_items),
+        "items": list(all_items.values()),
     }
 
 
@@ -262,23 +390,51 @@ def exploit(request: ExploitRequest):
     result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
     logger.info(f"[MANUAL] Result: {result}")
 
-    if result.returncode != 0:
-        return {
-            "status": "FAILURE",
-            "details": result.stderr.strip() or result.stdout.strip(),
-            "artifact": {
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "returncode": result.returncode,
-            },
-        }
+    ERROR_PATTERNS = [
+        "request failed",
+        "invalid url",
+        "no scheme supplied",
+        "connection refused",
+        "connection error",
+        "timeout",
+        "traceback",
+        "exception",
+        "error:",
+    ]
+
+    SUCCESS_PATTERNS = [
+        "uid=",
+        "gid=",
+        "root",
+        "www-data",
+    ]
+
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    combined = f"{stdout}\n{stderr}".lower()
+
+    if any(err in combined for err in ERROR_PATTERNS):
+        status = "FAILURE"
+        details = stdout or stderr or "Exploit reported an error"
+
+    elif any(ok in combined for ok in SUCCESS_PATTERNS):
+        status = "SUCCESS"
+        details = stdout
+
+    elif result.returncode != 0:
+        status = "FAILURE"
+        details = stderr or stdout or "Non-zero return code"
+
+    else:
+        status = "UNKNOWN"
+        details = stdout or "Ambiguous exploit output"
 
     return {
-        "status": "SUCCESS",
-        "details": result.stdout.strip() or "Command executed successfully",
+        "status": status,
+        "details": details,
         "artifact": {
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "stdout": stdout,
+            "stderr": stderr,
             "returncode": result.returncode,
         },
     }
@@ -456,6 +612,77 @@ def framework_module_install(payload: dict):
     except Exception as e:
         logger.exception(f"[FRAMEWORK_MODULE_INSTALL] failed for {kali_path}")
         return {"status": "FAILURE", "details": str(e)}
+
+
+@app.post("/execute/curl")
+def execute_curl(payload: Dict[str, Any]):
+    """
+    Execute a curl request from the Kali Engine.
+    Used for generic HTTP probing (OpenAPI, headers, pages, etc).
+    """
+    try:
+        url = payload.get("url")
+        method = payload.get("method", "GET").upper()
+        headers = payload.get("headers", {})
+        data = payload.get("data")
+        follow_redirects = payload.get("follow_redirects", True)
+        include_headers = payload.get("include_headers", False)
+
+        if not url:
+            return {
+                "status": "EXECUTOR_ERROR",
+                "details": "Missing 'url' parameter",
+            }
+
+        if not url.startswith(("http://", "https://")):
+            return {
+                "status": "EXECUTOR_ERROR",
+                "details": "Only http:// or https:// URLs are allowed",
+            }
+
+        # Command creation
+        cmd = ["curl", "-sS"]
+        if follow_redirects:
+            cmd.append("-L")
+        if include_headers:
+            cmd.append("-i")
+        cmd.extend(["-X", method])
+        for k, v in headers.items():
+            cmd.extend(["-H", f"{k}: {v}"])
+        if data:
+            cmd.extend(["--data", data])
+        cmd.append(url)
+
+        logger.info(f"[CURL_EXECUTOR] Command: {cmd}")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=HTTP_TIMEOUT,
+        )
+
+        return {
+            "status": "SUCCESS" if result.returncode == 0 else "FAILURE",
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode,
+            "command": " ".join(cmd),
+        }
+
+    except subprocess.TimeoutExpired:
+        logger.exception("[CURL_EXECUTOR] timeout")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": "curl execution timed out",
+        }
+
+    except Exception as e:
+        logger.exception("[CURL_EXECUTOR] failed")
+        return {
+            "status": "EXECUTOR_ERROR",
+            "details": str(e),
+        }
 
 
 @app.get("/health")

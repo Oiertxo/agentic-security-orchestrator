@@ -12,7 +12,7 @@ def _clean(value):
 def port_map_to_toon(port_map: dict, step=1) -> str:
     if not port_map:
         if step == 0:
-            return "Discovery not done yet"
+            return "Must perform discovery, not done yet"
         return "services[0]"
 
     services_count = sum(len(ports) for ports in port_map.values())
@@ -203,9 +203,12 @@ def pending_surfaces_to_toon(pending_surfaces: Dict[str, AttackSurface]) -> str:
         cves = surface.get("cves", [])
         cves_str = "|".join(cves) if cves else "-"
 
-        # Available exploits (using next_tool IDs, as you decided)
+        # Available exploits
         exploit_ids = surface.get("exploit_ids", [])
-        available_exploits = "|".join(exploit_ids) if exploit_ids else "-"
+        attempted = surface.get("attempted_exploits", {}).keys()
+
+        available = [eid for eid in exploit_ids if eid not in attempted]
+        available_exploits = "|".join(available) if available else "-"
 
         # Attempted exploits history
         attempted_map = surface.get("attempted_exploits", {})
