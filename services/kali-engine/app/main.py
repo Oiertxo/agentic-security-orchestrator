@@ -130,34 +130,66 @@ def cve_lookup(req: CveLookupRequest):
     - Version filtering is performed locally, not in NVD
     """
 
-    logger.info(f"[CVE_LOOKUP] target={req.port} product={req.product} name={req.name}")
-
-    result = nvd_multi_keyword_search(
-        name=req.name,
-        product=req.product,
-        resultsPerPage=req.resultsPerPage,
-        max_results=req.maxResults,
+    logger.info(
+        f"[CVE_LOOKUP] target={req.port} product={req.product} name={req.name} app_name={req.app_name}"
     )
+
+    search_targets = []
+
+    # App first
+    if req.app_name:
+        search_targets.append({"product": req.app_name, "name": req.name})
+
+    # Service later
+    if req.product:
+        search_targets.append({"product": req.product, "name": req.name})
+
+    all_items: dict[str, dict] = {}
+    combined_signal = {}
+    keywords_tested = []
+
+    for target in search_targets:
+        logger.info(f"[CVE_LOOKUP] Searching: {target}")
+
+        result = nvd_multi_keyword_search(
+            name=target["name"],
+            product=target["product"],
+            resultsPerPage=req.resultsPerPage,
+            max_results=req.maxResults,
+        )
+
+        # Merge signals
+        combined_signal.update(result.get("signal", {}))
+        keywords_tested.extend(result.get("keywords_tested", []))
+
+        # Merge CVEs
+        for cve in result["items"]:
+            if cve["cve_id"] not in all_items:
+                cve["found_by"] = cve.get("found_by", []) + [target["product"]]
+                all_items[cve["cve_id"]] = cve
+            else:
+                all_items[cve["cve_id"]]["found_by"].append(target["product"])
 
     return {
         "query": {
             "name": req.name,
             "product": req.product,
+            "app_name": req.app_name,
             "version": req.version,
+            "app_version": req.app_version,
             "service": req.service,
             "vendor": req.vendor,
             "ostype": req.ostype,
             "extrainfo": req.extrainfo,
             "port": req.port,
-            "keywords_tested": result.get("keywords_tested"),
-            "signal": result.get("signal"),
+            "keywords_tested": keywords_tested,
+            "signal": combined_signal,
         },
-        "count": result["count"],
-        "items": result["items"],
+        "count": len(all_items),
+        "items": list(all_items.values()),
         "note": (
-            "Summarized CVE records from NVD CVE API v2.0. "
-            "Adaptive multi-keyword search without version constraints. "
-            "Final applicability must be validated locally."
+            "Aggregated CVE results from application and infrastructure layers. "
+            "Adaptive multi-keyword search without version constraints."
         ),
     }
 
@@ -400,6 +432,16 @@ def exploit(request: ExploitRequest):
         "traceback",
         "exception",
         "error:",
+        "unknown command",
+        "failed",
+        "not found",
+        "unable to",
+        "could not",
+        "no such file",
+        "denied",
+        "invalid",
+        "bad",
+        "usage:",
     ]
 
     SUCCESS_PATTERNS = [
@@ -426,7 +468,7 @@ def exploit(request: ExploitRequest):
         details = stderr or stdout or "Non-zero return code"
 
     else:
-        status = "UNKNOWN"
+        status = "FAILURE"
         details = stdout or "Ambiguous exploit output"
 
     return {

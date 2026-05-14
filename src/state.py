@@ -105,8 +105,8 @@ class AttackSurface(TypedDict):
     service: str
     product: Optional[str]
     version: Optional[str]
-    cves: List[str]
-    exploit_ids: List[str]
+    exploits: List[Any]
+    framework_modules: List[str]
 
     # Control
     status: Literal["pending", "exploited", "aborted"]
