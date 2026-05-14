@@ -46,12 +46,27 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
     if engine_result.get("ok"):
         response = engine_result.get("response", {})
         items = response.get("items", [])
-        detected_version = normalize_version(args.get("version"))
+
+        # Get versions
+        versions = []
+        raw_app_version = args.get("app_version")
+        raw_service_version = args.get("version")
+
+        if raw_app_version:
+            versions.append(normalize_version(raw_app_version))
+        if raw_service_version:
+            versions.append(normalize_version(raw_service_version))
+        if not versions:
+            versions.append({"type": "unknown"})
 
         # 1. Filter applicable items
-        applicable_items = [
-            item for item in items if is_cve_applicable(item, detected_version)
-        ]
+        applicable_items = []
+        for item in items:
+            for detected_version in versions:
+                if is_cve_applicable(item, detected_version):
+                    item["matched_version"] = detected_version
+                    applicable_items.append(item)
+                    break
 
         # 2. Filter by threshold and calculate scores
         filtered_items = []
@@ -62,7 +77,7 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
                 item.get("cvss_v2_base"),
             ]
             max_score = max(filter(None, scores), default=0)
-            
+
             if max_score >= 8.0:
                 item["calculated_max_cvss"] = max_score
                 item["severity_label"] = get_cvss_severity(scores)
@@ -71,16 +86,16 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
         # 3. SORTING LOGIC: Severity (Calculated CVSS) DESC, then Recency (CVE ID) DESC
         def sort_key(x):
             severity = x.get("calculated_max_cvss", 0)
-            
+
             # Recency: Extract (Year, ID) from 'CVE-2017-12635' -> (2017, 12635)
             cve_str = x.get("cve_id", "CVE-1970-0")
-            parts = cve_str.split('-')
+            parts = cve_str.split("-")
             try:
                 year = int(parts[1])
                 seq = int(parts[2])
             except (IndexError, ValueError):
                 year, seq = 0, 0
-                
+
             return (severity, year, seq)
 
         # We sort descending (highest severity and newest year first)
@@ -122,7 +137,11 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
     for ip, ports in port_map.items():
         analyzed_cve_ip = new_analyzed_services_for_cve.get(ip, [])
         for port, info in ports.items():
-            if info.get("product") and info.get("version") and port not in analyzed_cve_ip:
+            if (
+                info.get("product")
+                and info.get("version")
+                and port not in analyzed_cve_ip
+            ):
                 pending_services_for_cve.setdefault(ip, []).append(port)
 
     updated_cve: CveState = {
@@ -141,14 +160,17 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
         "next_step": "planner",
     }
 
+
 def _parse_version_tuple(v: str) -> Optional[Tuple[int, ...]]:
-    if not v: return None
-    clean_v = re.sub(r'[^0-9.]', '', v).strip('.')
+    if not v:
+        return None
+    clean_v = re.sub(r"[^0-9.]", "", v).strip(".")
     parts = clean_v.split(".")
     try:
         return tuple(int(p) for p in parts if p.isdigit())
     except ValueError:
         return None
+
 
 def normalize_version(raw_version: Optional[str]) -> Dict[str, Any]:
     """
@@ -214,13 +236,14 @@ def is_cve_applicable(item: Dict, detected_version: Dict) -> bool:
         f"[CVE_EXECUTOR]: DEBUG is cve applicable {item}, {detected_version}"
     )
 
-    # Fail-closed
+    # Fail-open
     if detected_version.get("type") == "unknown":
-        return False
-
+        logger.warning(f"[CVE_EXECUTOR] Unknown version: allow CVE: {item}")
+        return True
     configs = item.get("configurations", [])
     if not configs:
-        return False
+        logger.warning(f"[CVE_EXECUTOR] No configurations: allow CVE {item}")
+        return True
 
     for cfg in configs:
         if not any(
