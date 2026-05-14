@@ -180,13 +180,13 @@ def pending_surfaces_to_toon(pending_surfaces: Dict[str, AttackSurface]) -> str:
     """
     Convert pending_surfaces into TOON format for exploit planner.
     Format:
-    pending_surfaces[N]{surface_id,service,product,port,cves,available_exploits,attempted_exploits}
+    pending_surfaces[N]{surface_id,service,product,port,cves,available_exploits}
     """
 
     count = len(pending_surfaces)
     header = (
         f"pending_surfaces[{count}]"
-        "{surface_id,service,product,port,cves,available_exploits,attempted_exploits}"
+        "{surface_id,service,product,port,cves,available_exploits}"
     )
 
     if not pending_surfaces:
@@ -199,33 +199,31 @@ def pending_surfaces_to_toon(pending_surfaces: Dict[str, AttackSurface]) -> str:
         product = surface.get("product") or "-"
         port = surface_id.split(":")[-1]
 
-        # CVEs
-        cves = surface.get("cves", [])
-        cves_str = "|".join(cves) if cves else "-"
+        exploits = surface.get("exploits", [])
 
-        # Available exploits
-        exploit_ids = surface.get("exploit_ids", [])
+        # CVE
+        cves_with_exploit = {
+            exp.get("associated_cve") for exp in exploits if exp.get("associated_cve")
+        }
+
+        cves_str = "|".join(cves_with_exploit) if cves_with_exploit else "-"
+
         attempted = surface.get("attempted_exploits", {}).keys()
 
-        available = [eid for eid in exploit_ids if eid not in attempted]
-        available_exploits = "|".join(available) if available else "-"
+        # Available exploits
+        available_exploits_list = [
+            exp["edb_id"]
+            for exp in exploits
+            if exp.get("associated_cve") in cves_with_exploit
+            and exp["edb_id"] not in attempted
+        ]
 
-        # Attempted exploits history
-        attempted_map = surface.get("attempted_exploits", {})
-        attempted_exploits = (
-            "|".join(f"{k}:{v}" for k, v in attempted_map.items())
-            if attempted_map
-            else "-"
+        available_exploits = (
+            "|".join(available_exploits_list) if available_exploits_list else "-"
         )
 
         rows.append(
-            f"{surface_id},"
-            f"{service},"
-            f"{product},"
-            f"{port},"
-            f"{cves_str},"
-            f"{available_exploits},"
-            f"{attempted_exploits}"
+            f"{surface_id},{service},{product},{port},{cves_str},{available_exploits},"
         )
 
     return header + "\n" + "\n".join(rows)
