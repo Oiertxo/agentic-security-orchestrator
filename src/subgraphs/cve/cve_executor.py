@@ -101,15 +101,11 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
         # We sort descending (highest severity and newest year first)
         filtered_items.sort(key=sort_key, reverse=True)
 
-        # 4. Limit to top candidates for exploitation mapping
-        # We increase the buffer to 20 to ensure we find at least 10 actual exploits later
-        final_candidates = filtered_items[:20]
-
         # Update vulnerabilities state
         service_key = f"{target_ip}:{target_port}" if target_port else target_ip
         existing_vulns = current_vulnerabilities.get(service_key, [])
         existing_ids = {v.get("cve_id") for v in existing_vulns}
-        new_vulns = [v for v in final_candidates if v.get("cve_id") not in existing_ids]
+        new_vulns = [v for v in filtered_items if v.get("cve_id") not in existing_ids]
         current_vulnerabilities[service_key] = existing_vulns + new_vulns
 
         if target_ip and target_port:
@@ -122,8 +118,8 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
             "ok": True,
             "tool": "cve_lookup",
             "target": service_key,
-            "count": len(final_candidates),
-            "top_cves": [x.get("cve_id") for x in final_candidates[:5]],
+            "count": len(filtered_items),
+            "top_cves": [x.get("cve_id") for x in filtered_items[:5]],
         }
     else:
         summary = {

@@ -9,7 +9,8 @@ llm = ChatOllama(
     model=os.getenv("MODEL_NAME", "qwen2.5:7b"),
     temperature=0,
     base_url=os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:11434"),
-    num_ctx=16384,
+    format="json",
+    num_ctx=32768,
     num_gpu=-1,
     repeat_penalty=1.2,
 )
