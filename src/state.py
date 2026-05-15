@@ -20,6 +20,8 @@ class ServiceMeta(TypedDict, total=False):
     http_paths: Dict[str, int]
     js_files: List[str]
     js_findings: Dict
+    html_samples: Dict[str, Dict[str, Any]]
+    http_analyzed: bool
 
 
 PortMap = Dict[str, Dict[int, ServiceMeta]]
