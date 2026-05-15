@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -65,11 +66,10 @@ def parse_as_json(x: Any) -> Any:
 
     # Case 2: List (you can decide to accept as-is or restrict)
     if isinstance(x, list):
-        # If you only expect a single dict in a 1-element list:
-        if len(x) == 1 and isinstance(x[0], dict):
-            return x[0]
-        # Otherwise, allow the list to pass (many models can return arrays)
-        return x
+        for item in x:
+            if isinstance(item, dict):
+                return item
+        raise ValueError("List does not contain valid JSON object")
 
     # Case 3: LangChain/LLM message object
     if hasattr(x, "content"):
@@ -285,3 +285,7 @@ def update_state_tokens(callback, state):
         state_tokens[k] += v
 
     return state_tokens, new_tokens
+
+
+def compute_hash(body: str) -> str:
+    return hashlib.md5(body.encode()).hexdigest()
