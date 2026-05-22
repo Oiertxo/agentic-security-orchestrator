@@ -13,6 +13,7 @@ from src.utils.utils import compute_hash
 
 OPENAPI_VERSION_RE = re.compile(r'"version"\s*:\s*"([^"]+)"')
 OPENAPI_TITLE_RE = re.compile(r'"title"\s*:\s*"([^"]+)"')
+
 COMMON_HTTP_PATHS = [
     "/",
     "/login",
@@ -111,6 +112,11 @@ VERSION_RE = re.compile(
     re.I,
 )
 
+JS_VERSION_RE = re.compile(
+    r'([a-zA-Z0-9_\-]*version)\s*=\s*[\'"]([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+    re.I,
+)
+
 
 @observe(name="Recon http")
 async def recon_http_node(state: AgentState, config: RunnableConfig) -> AgentState:
@@ -164,8 +170,8 @@ async def recon_http_node(state: AgentState, config: RunnableConfig) -> AgentSta
 async def openapi_http_lookup(port_map):
     for ip, ports in port_map.items():
         for port, meta in ports.items():
-            if not is_http_service(meta) or meta.get("http_analyzed"):
-                logger.debug(f"[RECON_HTTP] Skipping already analyzed {ip}:{port}")
+            if not is_http_service(meta):
+                logger.debug(f"[RECON_HTTP] Service not HTTP: {ip}:{port}")
                 continue
 
             url = f"http://{ip}:{port}/openapi.json"
@@ -200,6 +206,19 @@ async def general_http_lookup(
     if not root:
         return meta
     store_html_sample(meta, "/", root["status_code"], root["body"])
+
+    body = root["body"]
+    # Detect js version
+    for var_name, version in JS_VERSION_RE.findall(body):
+        var_name_l = var_name.lower()
+
+        if not meta.get("app_version"):
+            meta["app_version"] = version
+
+        if "version" in var_name_l:
+            prefix = var_name_l.replace("version", "").strip("_-")
+            if prefix:
+                meta.setdefault("app_name", prefix)
 
     scripts = normalize_js_urls(base_url, extract_script_srcs(root["body"]))
     if scripts:

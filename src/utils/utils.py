@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
-from src.state import AgentState, PortMap, TokenCount
+from src.state import AgentState, PortMap, ServiceMeta, TokenCount
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
 
@@ -154,16 +154,18 @@ def merge_port_map(old_map: PortMap, new_map: PortMap) -> PortMap:
     # Merge new
     for ip, ports in (new_map or {}).items():
         merged.setdefault(ip, {})
+
         for p, meta in (ports or {}).items():
             p = int(p)
             existing = merged[ip].get(p, {})
-            merged[ip][p] = {
-                "name": meta.get("name") or existing.get("name"),
-                "product": meta.get("product") or existing.get("product"),
-                "version": meta.get("version") or existing.get("version"),
-                "extrainfo": meta.get("extrainfo") or existing.get("extrainfo"),
-                "ostype": meta.get("ostype") or existing.get("ostype"),
-            }
+
+            new_meta: ServiceMeta = deepcopy(existing)
+
+            for k, v in meta.items():
+                if v is not None:
+                    new_meta[k] = v
+
+            merged[ip][p] = new_meta
 
     return merged
 

@@ -136,7 +136,7 @@ async def recon_executor_node(state: AgentState, config: RunnableConfig) -> Agen
 
     # HTTP lookup
     http_service = any(
-        is_http_service(meta)
+        is_http_service(meta) and not meta.get("http_analyzed")
         for ports in new_port_map.values()
         for meta in ports.values()
     )
