@@ -152,3 +152,4 @@ class AgentState(TypedDict):
     vuln_map: VulnMapState
     exploit: ExploitState
     report_finished: bool
+    intended_cve: Optional[Dict[str, Any]]

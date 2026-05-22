@@ -34,7 +34,6 @@ async def cve_planner_node(state: AgentState, config: RunnableConfig) -> AgentSt
         ip = next(iter(pending))
         port = pending[ip].pop(0)
 
-        # bookkeeping
         analyzed.setdefault(ip, []).append(int(port))
         if not pending[ip]:
             pending.pop(ip)
@@ -43,7 +42,7 @@ async def cve_planner_node(state: AgentState, config: RunnableConfig) -> AgentSt
         name = service.get("name")
         product = service.get("product")
         version = service.get("version")
-        app_name = service.get("app_name")
+        app_name = (service.get("app_name") or product or "").lower()
         app_version = service.get("app_version")
 
         # Not CVE-eligible: skip and continue loop

@@ -46,6 +46,7 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
     if engine_result.get("ok"):
         response = engine_result.get("response", {})
         items = response.get("items", [])
+        logger.info(f"[CVE_EXECUTOR_NODE] engine result: {engine_result}")
 
         # Get versions
         versions = []
@@ -58,6 +59,8 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
             versions.append(normalize_version(raw_service_version))
         if not versions:
             versions.append({"type": "unknown"})
+
+        logger.info(f"[CVE_EXECUTOR_NODE] versions {versions}")
 
         # 1. Filter applicable items
         applicable_items = []
@@ -119,7 +122,6 @@ async def cve_executor_node(state: AgentState, config: RunnableConfig) -> AgentS
             "tool": "cve_lookup",
             "target": service_key,
             "count": len(filtered_items),
-            "top_cves": [x.get("cve_id") for x in filtered_items[:5]],
         }
     else:
         summary = {
@@ -228,10 +230,6 @@ def normalize_version(raw_version: Optional[str]) -> Dict[str, Any]:
 
 
 def is_cve_applicable(item: Dict, detected_version: Dict) -> bool:
-    logger.warning(
-        f"[CVE_EXECUTOR]: DEBUG is cve applicable {item}, {detected_version}"
-    )
-
     # Fail-open
     if detected_version.get("type") == "unknown":
         logger.warning(f"[CVE_EXECUTOR] Unknown version: allow CVE: {item}")
@@ -290,7 +288,6 @@ def is_cve_applicable(item: Dict, detected_version: Dict) -> bool:
             )
 
             if lower_ok and upper_ok:
-                logger.warning("[CVE_EXECUTOR]: DEBUG single match true")
                 return True
 
         # -------------------------
@@ -309,8 +306,6 @@ def is_cve_applicable(item: Dict, detected_version: Dict) -> bool:
             )
 
             if lower_ok and upper_ok:
-                logger.warning("[CVE_EXECUTOR]: DEBUG range match true")
                 return True
 
-    logger.warning("[CVE_EXECUTOR]: DEBUG no matches")
     return False

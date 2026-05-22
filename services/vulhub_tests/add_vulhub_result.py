@@ -123,6 +123,14 @@ def main():
     else:
         cve = ""
 
+    cve_source = choose_one(
+        "How was the CVE obtained?",
+        {
+            1: "detected",
+            2: "manual",
+        },
+    )
+
     types = choose_multiple(
         "Attack types:",
         ATTACK_TYPES,
@@ -154,6 +162,7 @@ def main():
     entry = {
         "service": service,
         "cve": cve,
+        "cve_source": cve_source,
         "types": types,
         "execution": {
             "started": started,
