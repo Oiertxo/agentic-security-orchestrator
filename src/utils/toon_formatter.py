@@ -223,7 +223,7 @@ def pending_surfaces_to_toon(pending_surfaces: Dict[str, AttackSurface]) -> str:
         )
 
         rows.append(
-            f"{surface_id},{service},{product},{port},{cves_str},{available_exploits},"
+            f"{surface_id.split(':')[0]},{service},{product},{port},{cves_str},{available_exploits},"
         )
 
     return header + "\n" + "\n".join(rows)
