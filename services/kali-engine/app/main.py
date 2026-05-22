@@ -7,7 +7,6 @@ import re
 import shutil
 import subprocess
 import time
-from itertools import combinations
 from logging.handlers import RotatingFileHandler
 from typing import Any, Dict
 
@@ -130,34 +129,66 @@ def cve_lookup(req: CveLookupRequest):
     - Version filtering is performed locally, not in NVD
     """
 
-    logger.info(f"[CVE_LOOKUP] target={req.port} product={req.product} name={req.name}")
-
-    result = nvd_multi_keyword_search(
-        name=req.name,
-        product=req.product,
-        resultsPerPage=req.resultsPerPage,
-        max_results=req.maxResults,
+    logger.info(
+        f"[CVE_LOOKUP] target={req.port} product={req.product} name={req.name} app_name={req.app_name}"
     )
+
+    search_targets = []
+
+    # App first
+    if req.app_name:
+        search_targets.append({"product": req.app_name, "name": req.name})
+
+    # Service later
+    if req.product:
+        search_targets.append({"product": req.product, "name": req.name})
+
+    all_items: dict[str, dict] = {}
+    combined_signal = {}
+    keywords_tested = []
+
+    for target in search_targets:
+        logger.info(f"[CVE_LOOKUP] Searching: {target}")
+
+        result = nvd_multi_keyword_search(
+            name=target["name"],
+            product=target["product"],
+            resultsPerPage=req.resultsPerPage,
+            max_results=req.maxResults,
+        )
+
+        # Merge signals
+        combined_signal.update(result.get("signal", {}))
+        keywords_tested.extend(result.get("keywords_tested", []))
+
+        # Merge CVEs
+        for cve in result["items"]:
+            if cve["cve_id"] not in all_items:
+                cve["found_by"] = cve.get("found_by", []) + [target["product"]]
+                all_items[cve["cve_id"]] = cve
+            else:
+                all_items[cve["cve_id"]]["found_by"].append(target["product"])
 
     return {
         "query": {
             "name": req.name,
             "product": req.product,
+            "app_name": req.app_name,
             "version": req.version,
+            "app_version": req.app_version,
             "service": req.service,
             "vendor": req.vendor,
             "ostype": req.ostype,
             "extrainfo": req.extrainfo,
             "port": req.port,
-            "keywords_tested": result.get("keywords_tested"),
-            "signal": result.get("signal"),
+            "keywords_tested": keywords_tested,
+            "signal": combined_signal,
         },
-        "count": result["count"],
-        "items": result["items"],
+        "count": len(all_items),
+        "items": list(all_items.values()),
         "note": (
-            "Summarized CVE records from NVD CVE API v2.0. "
-            "Adaptive multi-keyword search without version constraints. "
-            "Final applicability must be validated locally."
+            "Aggregated CVE results from application and infrastructure layers. "
+            "Adaptive multi-keyword search without version constraints."
         ),
     }
 
@@ -214,7 +245,6 @@ def _nvd_keyword_search(resultsPerPage, keyword: str, max_results: int) -> dict:
             )
 
         data = r.json()
-        logger.warning(f"[CVE_RESPONSE] Raw: {data}")
         vulns = data.get("vulnerabilities", [])
         if not vulns:
             break
@@ -248,20 +278,15 @@ def _backoff_sleep(attempt: int) -> None:
     time.sleep(delay + jitter)
 
 
-def keyword_combinations(text: str, max_len: int = 3) -> list[str]:
-    tokens = [t.lower() for t in re.split(r"\W+", text) if t]
+def build_keywords(product, name):
+    tokens = [t for t in re.split(r"\W+", product.lower()) if len(t) > 2]
 
-    seen = set()
-    combos = []
+    keywords = tokens.copy()
 
-    for size in range(1, min(len(tokens), max_len) + 1):
-        for combo in combinations(tokens, size):
-            k = " ".join(combo)
-            if k not in seen:
-                seen.add(k)
-                combos.append(k)
+    if name:
+        keywords.append(name.lower())
 
-    return combos
+    return list(dict.fromkeys(keywords))
 
 
 def nvd_multi_keyword_search(
@@ -272,12 +297,7 @@ def nvd_multi_keyword_search(
     max_results: int,
     min_signal: int = 1,
 ) -> dict:
-    keywords = []
-
-    if name:
-        keywords.append(name.lower())
-
-    keywords.extend(keyword_combinations(product))
+    keywords = build_keywords(product, name)
 
     all_items: dict[str, dict] = {}
     signal: dict[str, int] = {}
@@ -400,6 +420,16 @@ def exploit(request: ExploitRequest):
         "traceback",
         "exception",
         "error:",
+        "unknown command",
+        "failed",
+        "not found",
+        "unable to",
+        "could not",
+        "no such file",
+        "denied",
+        "invalid",
+        "bad",
+        "usage:",
     ]
 
     SUCCESS_PATTERNS = [
@@ -426,7 +456,7 @@ def exploit(request: ExploitRequest):
         details = stderr or stdout or "Non-zero return code"
 
     else:
-        status = "UNKNOWN"
+        status = "FAILURE"
         details = stdout or "Ambiguous exploit output"
 
     return {
@@ -572,13 +602,8 @@ def framework_module_install(payload: dict):
             "details": f"Kali exploit file not found: {kali_path}",
         }
 
-    logger.warning("[DEBUG] framework_module_install CALLED")
-    logger.warning(f"[DEBUG] kali_path = {kali_path}")
-    logger.warning(f"[DEBUG] exists(kali_path) = {os.path.exists(kali_path)}")
-
     try:
         target_path = build_msf_module_path(kali_path)
-        logger.warning(f"[DEBUG] COPY {kali_path} -> {target_path}")
         if os.path.exists(target_path):
             return {
                 "status": "SUCCESS",

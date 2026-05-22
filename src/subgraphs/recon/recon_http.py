@@ -9,9 +9,11 @@ from langfuse import observe
 from src.logger import logger
 from src.state import AgentState, ReconState, ServiceMeta
 from src.subgraphs.recon.recon_executor_client import call_curl
+from src.utils.utils import compute_hash
 
 OPENAPI_VERSION_RE = re.compile(r'"version"\s*:\s*"([^"]+)"')
 OPENAPI_TITLE_RE = re.compile(r'"title"\s*:\s*"([^"]+)"')
+
 COMMON_HTTP_PATHS = [
     "/",
     "/login",
@@ -110,6 +112,11 @@ VERSION_RE = re.compile(
     re.I,
 )
 
+JS_VERSION_RE = re.compile(
+    r'([a-zA-Z0-9_\-]*version)\s*=\s*[\'"]([0-9]+\.[0-9]+(?:\.[0-9]+)?)',
+    re.I,
+)
+
 
 @observe(name="Recon http")
 async def recon_http_node(state: AgentState, config: RunnableConfig) -> AgentState:
@@ -164,6 +171,7 @@ async def openapi_http_lookup(port_map):
     for ip, ports in port_map.items():
         for port, meta in ports.items():
             if not is_http_service(meta):
+                logger.debug(f"[RECON_HTTP] Service not HTTP: {ip}:{port}")
                 continue
 
             url = f"http://{ip}:{port}/openapi.json"
@@ -197,6 +205,20 @@ async def general_http_lookup(
     root = await http_get(f"{base_url}/")
     if not root:
         return meta
+    store_html_sample(meta, "/", root["status_code"], root["body"])
+
+    body = root["body"]
+    # Detect js version
+    for var_name, version in JS_VERSION_RE.findall(body):
+        var_name_l = var_name.lower()
+
+        if not meta.get("app_version"):
+            meta["app_version"] = version
+
+        if "version" in var_name_l:
+            prefix = var_name_l.replace("version", "").strip("_-")
+            if prefix:
+                meta.setdefault("app_name", prefix)
 
     scripts = normalize_js_urls(base_url, extract_script_srcs(root["body"]))
     if scripts:
@@ -222,6 +244,7 @@ async def general_http_lookup(
         resp = await http_get(base_url + path)
         if not resp:
             continue
+        store_html_sample(meta, path, resp["status_code"], resp["body"])
 
         logger.info(f"[RECON_HTTP] HTTP_LOOKUP {base_url + path} response: {resp}")
 
@@ -236,7 +259,7 @@ async def general_http_lookup(
             app_version = extract_openapi_version(resp["body"])
 
             if app_title:
-                meta["app_name"] = app_title
+                meta["app_name"] = app_title.lower()
             if app_version:
                 meta["app_version"] = app_version
 
@@ -246,6 +269,7 @@ async def general_http_lookup(
             meta["frameworks"] = sorted(frameworks)
 
     meta["js_files"] = sorted(js_files)
+    meta["http_analyzed"] = True
 
     return meta
 
@@ -407,7 +431,7 @@ async def analyze_js_files(js_urls: list[str]) -> dict:
             findings["app_versions"].add(m[2])
 
         for m in PACKAGE_JSON_RE.findall(body):
-            findings["app_names"].add(m[0])
+            findings["app_names"].add(m[0].lower())
             findings["app_versions"].add(m[1])
 
         findings["endpoints"].update(ENDPOINT_RE.findall(body))
@@ -444,3 +468,32 @@ def _split_http(raw: str) -> tuple[str, str]:
         head, body = raw.split("\n\n", 1)
         return head, body
     return raw, ""
+
+
+def store_html_sample(meta: ServiceMeta, path: str, status: int, body: str):
+
+    if not should_store_html(status):
+        return
+
+    html_samples = meta.setdefault("html_samples", {})
+    normalized = normalize_html(body)
+    h = compute_hash(normalized)
+
+    if h not in html_samples:
+        html_samples[h] = {
+            "body": body,
+            "status": status,
+            "path": path,
+        }
+
+
+def should_store_html(status: int) -> bool:
+    return 200 <= status < 400 or status in (403, 500)
+
+
+def normalize_html(body: str) -> str:
+    body = re.sub(r"form-[A-Za-z0-9\-_]+", "FORM_ID", body)
+    body = re.sub(r"\d{10,}", "NUM", body)
+    body = re.sub(r'value="[^"]{20,}"', 'value="X"', body)
+    body = re.sub(r"\s+", " ", body)
+    return body.strip()

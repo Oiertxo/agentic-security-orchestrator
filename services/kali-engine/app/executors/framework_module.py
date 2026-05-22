@@ -1,8 +1,9 @@
 import logging
 import re
-import shlex
 import subprocess
 from typing import Any, Dict
+
+from utils import get_local_ip_for_target
 
 logger = logging.getLogger("kali-engine.executor.framework_module")
 
@@ -20,18 +21,44 @@ def framework_module_execute(params: Dict[str, Any]) -> Dict[str, Any]:
 
     options = params.get("options", {})
 
-    # Build Metasploit command script
+    # ---------------------------
+    # Normalization
+    # ---------------------------
+    if "RHOST" in options and "RHOSTS" not in options:
+        options["RHOSTS"] = options.pop("RHOST")
+
+    target = options.get("RHOSTS")
+
+    if target:
+        if "LHOST" not in options or options["LHOST"] in ("127.0.0.1", "0.0.0.0"):
+            options["LHOST"] = get_local_ip_for_target(target)
+
+        if "LHOST" in options and "LPORT" not in options:
+            options["LPORT"] = 4444
+
+    # ---------------------------
+    # Build Metasploit command
+    # ---------------------------
     msf_commands = []
+
+    msf_commands.append("sleep 2")
+    msf_commands.append("reload_all")
+    msf_commands.append("sleep 2")
+
     msf_commands.append(f"use {module_path}")
 
     for key, value in options.items():
         msf_commands.append(f"set {key} {value}")
 
-    msf_commands.append("run")
+    msf_commands.append("run -j")
+    msf_commands.append("sleep 5")
+    msf_commands.append('sessions -c "id"')
     msf_commands.append("exit")
+    msf_commands.append("exit -y")
 
     msf_script = "; ".join(msf_commands)
-    cmd = f"msfconsole -q -x {shlex.quote(msf_script)}"
+
+    cmd = f'msfconsole -q -x "{msf_script}"'
 
     logger.info(f"[FRAMEWORK_MODULE_EXECUTOR] Running: {cmd}")
 
@@ -47,32 +74,46 @@ def framework_module_execute(params: Dict[str, Any]) -> Dict[str, Any]:
         stdout = proc.stdout.lower()
         stderr = proc.stderr.lower()
         rc = proc.returncode
+        combined = stdout + "\n" + stderr
+
+        ERROR_PATTERNS = [
+            "failed",
+            "error",
+            "unknown command",
+            "invalid",
+            "not found",
+            "could not",
+            "unable",
+            "ambiguous",
+            "no such file",
+        ]
+
+        SUCCESS_PATTERNS = [
+            "meterpreter session",
+            "session opened",
+            "shell session",
+            "uid=",
+        ]
 
         if rc != 0:
-            return {
-                "status": "FAILURE",
-                "details": stderr or stdout or "Metasploit execution failed",
-                "artifact": {
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "returncode": rc,
-                },
-            }
+            status = "FAILURE"
+            details = "Error on execution"
 
-        if "failed to load module" in stdout:
-            return {
-                "status": "TECHNICAL_FAILURE",
-                "details": "Metasploit module could not be loaded (missing or deprecated)",
-                "artifact": {
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "returncode": rc,
-                },
-            }
+        elif any(err in combined for err in ERROR_PATTERNS):
+            status = "FAILURE"
+            details = "Error on exploitation"
+
+        elif any(ok in combined for ok in SUCCESS_PATTERNS):
+            status = "SUCCESS"
+            details = "Success on exploitation"
+
+        else:
+            status = "FAILURE"
+            details = "Unknown error"
 
         return {
-            "status": "SUCCESS",
-            "details": "Metasploit module executed",
+            "status": status,
+            "details": details,
             "artifact": {
                 "stdout": stdout,
                 "stderr": stderr,

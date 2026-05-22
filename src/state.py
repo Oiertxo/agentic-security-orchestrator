@@ -20,6 +20,8 @@ class ServiceMeta(TypedDict, total=False):
     http_paths: Dict[str, int]
     js_files: List[str]
     js_findings: Dict
+    html_samples: Dict[str, Dict[str, Any]]
+    http_analyzed: bool
 
 
 PortMap = Dict[str, Dict[int, ServiceMeta]]
@@ -105,8 +107,8 @@ class AttackSurface(TypedDict):
     service: str
     product: Optional[str]
     version: Optional[str]
-    cves: List[str]
-    exploit_ids: List[str]
+    exploits: List[Any]
+    framework_modules: List[str]
 
     # Control
     status: Literal["pending", "exploited", "aborted"]
@@ -150,3 +152,4 @@ class AgentState(TypedDict):
     vuln_map: VulnMapState
     exploit: ExploitState
     report_finished: bool
+    intended_cve: Optional[Dict[str, Any]]

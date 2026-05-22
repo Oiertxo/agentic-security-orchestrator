@@ -5,6 +5,7 @@ from src.state import AgentState
 
 from .recon_executor import recon_executor_node
 from .recon_http import recon_http_node
+from .recon_http_analyzer import recon_http_analyzer_node
 from .recon_planner import recon_planner_node
 
 MAX_STEPS = 400
@@ -17,6 +18,7 @@ def build_recon_subgraph():
     graph.add_node("recon_planner", recon_planner_node)
     graph.add_node("recon_executor", recon_executor_node)
     graph.add_node("recon_http", recon_http_node)
+    graph.add_node("recon_http_analyzer", recon_http_analyzer_node)
 
     graph.set_entry_point("recon_planner")
 
@@ -49,7 +51,9 @@ def build_recon_subgraph():
         },
     )
 
-    graph.add_edge("recon_http", "recon_planner")
+    graph.add_edge("recon_http", "recon_http_analyzer")
+
+    graph.add_edge("recon_http_analyzer", "recon_planner")
 
     return graph.compile()
 

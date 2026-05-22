@@ -61,7 +61,7 @@ class ExploitSemanticSchema(BaseModel):
         default_factory=list,
         description="Conceptual parameters referenced by the exploit without fixed values",
     )
-    hardcoded_values: Dict[str, int | str] = Field(
+    hardcoded_values: Dict[str, int | str | None] = Field(
         default_factory=dict,
         description="Literal constant values embedded in the exploit (ports, paths, filenames, etc.)",
     )

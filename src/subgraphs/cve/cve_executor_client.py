@@ -38,6 +38,8 @@ def _normalize_cve_lookup_payload(
         "name": arguments.get("name", ""),
         "product": product,
         "version": arguments.get("version"),
+        "app_name": arguments.get("app_name"),
+        "app_version": arguments.get("app_version"),
         "service": arguments.get("service"),
         "vendor": arguments.get("vendor"),
         "ostype": arguments.get("ostype"),

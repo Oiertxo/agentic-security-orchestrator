@@ -5,7 +5,7 @@ import os
 import sys
 import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import aiosqlite
 import requests
@@ -35,7 +35,6 @@ memory: Optional[AsyncSqliteSaver] = None
 security_graph: Optional[CompiledStateGraph] = None
 
 INTERRUPTS_ENABLED = os.getenv("ENABLE_INTERRUPTS", "true").lower() == "true"
-print("INTERRUPTS_ENABLED: ", INTERRUPTS_ENABLED)
 
 
 @asynccontextmanager
@@ -72,6 +71,8 @@ class UserRequest(BaseModel):
         default=False,
         description="If True, wipes existing thread data and starts a fresh audit.",
     )
+    # Vulhub testing
+    intended_cve: Optional[Dict[str, Any]] = None
 
 
 # Define the API Endpoint
@@ -105,7 +106,7 @@ async def chat_endpoint(request: UserRequest):
             if request.start_new:
                 await delete_thread(thread_id)
                 async for chunk in start_fresh_audit_stream(
-                    request.query, config, thread_id
+                    request.query, config, thread_id, request.intended_cve
                 ):
                     yield chunk
                 return
@@ -144,7 +145,7 @@ async def chat_endpoint(request: UserRequest):
             else:
                 # Default: new thread
                 async for chunk in start_fresh_audit_stream(
-                    request.query, config, thread_id
+                    request.query, config, thread_id, request.intended_cve
                 ):
                     yield chunk
 
@@ -432,7 +433,7 @@ async def run_graph_stream(input_data, config, thread_id):
             yield f"data: {json.dumps({'token': messages[-1].content, 'type': 'final_report'})}\n\n"
 
 
-async def start_fresh_audit_stream(query, config, thread_id):
+async def start_fresh_audit_stream(query, config, thread_id, intended_cve=None):
     initial_state: AgentState = {
         "user_target": "",
         "messages": [HumanMessage(content=query)],
@@ -474,6 +475,7 @@ async def start_fresh_audit_stream(query, config, thread_id):
             "events": [],
         },
         "report_finished": False,
+        "intended_cve": intended_cve,
     }
     async for chunk in run_graph_stream(initial_state, config, thread_id):
         yield chunk

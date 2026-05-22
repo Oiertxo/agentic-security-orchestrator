@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -6,7 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
-from src.state import AgentState, PortMap, TokenCount
+from src.state import AgentState, PortMap, ServiceMeta, TokenCount
 
 _JSON_FENCE_RE = re.compile(r"^```(?:json)?\s*|\s*```$", re.IGNORECASE | re.DOTALL)
 
@@ -65,11 +66,10 @@ def parse_as_json(x: Any) -> Any:
 
     # Case 2: List (you can decide to accept as-is or restrict)
     if isinstance(x, list):
-        # If you only expect a single dict in a 1-element list:
-        if len(x) == 1 and isinstance(x[0], dict):
-            return x[0]
-        # Otherwise, allow the list to pass (many models can return arrays)
-        return x
+        for item in x:
+            if isinstance(item, dict):
+                return item
+        raise ValueError("List does not contain valid JSON object")
 
     # Case 3: LangChain/LLM message object
     if hasattr(x, "content"):
@@ -154,16 +154,18 @@ def merge_port_map(old_map: PortMap, new_map: PortMap) -> PortMap:
     # Merge new
     for ip, ports in (new_map or {}).items():
         merged.setdefault(ip, {})
+
         for p, meta in (ports or {}).items():
             p = int(p)
             existing = merged[ip].get(p, {})
-            merged[ip][p] = {
-                "name": meta.get("name") or existing.get("name"),
-                "product": meta.get("product") or existing.get("product"),
-                "version": meta.get("version") or existing.get("version"),
-                "extrainfo": meta.get("extrainfo") or existing.get("extrainfo"),
-                "ostype": meta.get("ostype") or existing.get("ostype"),
-            }
+
+            new_meta: ServiceMeta = deepcopy(existing)
+
+            for k, v in meta.items():
+                if v is not None:
+                    new_meta[k] = v
+
+            merged[ip][p] = new_meta
 
     return merged
 
@@ -285,3 +287,7 @@ def update_state_tokens(callback, state):
         state_tokens[k] += v
 
     return state_tokens, new_tokens
+
+
+def compute_hash(body: str) -> str:
+    return hashlib.md5(body.encode()).hexdigest()

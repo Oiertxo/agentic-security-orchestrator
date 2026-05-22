@@ -6,8 +6,6 @@ from src.logger import logger
 from src.state import AgentState, VulnMapState
 from src.subgraphs.vuln_map.vuln_map_subgraph import vuln_map_subgraph
 
-MAX_CVES_PER_PORT = 20
-
 
 @observe(name="Vuln Map Worker")
 async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> AgentState:
@@ -27,7 +25,7 @@ async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> Age
             pending.setdefault(ip, {}).setdefault(port, [])
             analyzed.setdefault(ip, {}).setdefault(port, [])
 
-            # SORTING LOGIC: 
+            # SORTING LOGIC:
             # 1. Severity (CVSS) is now the primary key.
             # 2. Year (Recency) is the secondary key for tie-breaking.
             sorted_cves = sorted(
@@ -36,9 +34,7 @@ async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> Age
                 reverse=True,
             )
 
-            # Limit to the top X most critical/recent candidates to avoid token bloat
-            # and focus on high-probability exploits.
-            for c in sorted_cves[:MAX_CVES_PER_PORT]:
+            for c in sorted_cves:
                 cve_id = c.get("cve_id")
                 if cve_id:
                     pending[ip][port].append(cve_id)
@@ -84,8 +80,8 @@ async def vuln_map_worker_node(state: AgentState, config: RunnableConfig) -> Age
 
 def cve_priority(c: dict) -> tuple:
     """
-    Returns a tuple used as a sort key. 
-    Sorted with reverse=True, it prioritizes higher scores first, 
+    Returns a tuple used as a sort key.
+    Sorted with reverse=True, it prioritizes higher scores first,
     then newer years.
     """
     cve_id = c.get("cve_id", "")
