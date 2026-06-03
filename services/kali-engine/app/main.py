@@ -384,9 +384,7 @@ def search_exploit(request: SearchsploitRequest):
             all_results.extend(json.loads(res_txt.stdout).get("RESULTS_EXPLOIT", []))
 
     unique_exploits = {exp["EDB-ID"]: exp for exp in all_results}.values()
-    sorted_exploits = sorted(
-        list(unique_exploits), key=lambda x: x.get("Verified") == "1", reverse=True
-    )
+    sorted_exploits = sorted(list(unique_exploits), reverse=True)
 
     return {
         "query": {
@@ -437,6 +435,9 @@ def exploit(request: ExploitRequest):
         "gid=",
         "root",
         "www-data",
+        "exploit successful",
+        "username:",
+        "password:",
     ]
 
     raw_stdout = ""
