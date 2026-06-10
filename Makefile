@@ -17,7 +17,7 @@ else
     RM_NET_IGNORE := || true
 endif
 
-.PHONY: help core lab full stop down clean network remove-network next
+.PHONY: help core lab monitor full stop down clean network remove-network next volumes
 
 help:
 	@echo ""
@@ -25,6 +25,7 @@ help:
 	@echo ""
 	@echo "  make core              Start core services"
 	@echo "  make lab               Start core + vulnerable targets"
+	@echo "  make monitor           Start core + monitoring"
 	@echo "  make full              Start core + targets + monitoring"
 	@echo "  make down              Stop running containers"
 	@echo "  make clean             Stop and remove containers, networks and volumes"
@@ -39,7 +40,10 @@ core: network
 lab: network
 	docker compose -f compose.core.yml -f compose.targets.yml up --build
 
-full: network
+monitor: network volumes
+	docker compose -f compose.core.yml -f compose.monitoring.yml up --build
+
+full: network volumes
 	docker compose $(COMPOSE_FILES) up --build
 
 stop:
@@ -68,3 +72,10 @@ remove-network:
 
 next:
 	$(PYTHON) ./services/vulhub_tests/create_services.py
+
+volumes:
+	@echo "[*] Ensuring external Docker volumes for Langfuse exist..."
+	@docker volume inspect langfuse_postgres_data > $(DEV_NULL) 2>&1 || docker volume create langfuse_postgres_data
+	@docker volume inspect langfuse_clickhouse_data > $(DEV_NULL) 2>&1 || docker volume create langfuse_clickhouse_data
+	@docker volume inspect langfuse_clickhouse_logs > $(DEV_NULL) 2>&1 || docker volume create langfuse_clickhouse_logs
+	@docker volume inspect langfuse_minio_data > $(DEV_NULL) 2>&1 || docker volume create langfuse_minio_data
