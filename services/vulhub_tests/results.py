@@ -68,29 +68,17 @@ def extract_phase_times(lines):
 
 
 def extract_step_count(text, phase):
-    start = text.find(f"'{phase}':")
-    if start == -1:
-        return 0
+    # Busca la fase seguida de su apertura de llave y cualquier contenido hasta su propio step_count
+    # Evitamos que se cruce de fase usando un lookahead negativo o acotando la búsqueda
+    pattern = r"'" + phase + r"':\s*\{[^}]*?'step_count':\s*(\d+)"
+    m = re.search(pattern, text)
+    if m:
+        return int(m.group(1))
 
-    brace_count = 0
-    i = start
-
-    while i < len(text):
-        if text[i] == "{":
-            brace_count += 1
-        elif text[i] == "}":
-            brace_count -= 1
-
-            if brace_count == 0:
-                block = text[start:i]
-                break
-
-        i += 1
-    else:
-        return 0
-
-    m = re.search(r"'step_count':\s*(\d+)", block)
-    return int(m.group(1)) if m else 0
+    # Si falla por el tamaño del HTML, usamos un método más directo y robusto:
+    pattern_fallback = r"'" + phase + r"':\s*\{.*? 'step_count':\s*(\d+)"
+    m_fb = re.search(pattern_fallback, text, re.DOTALL)
+    return int(m_fb.group(1)) if m_fb else 0
 
 
 def percentile(data, p):
