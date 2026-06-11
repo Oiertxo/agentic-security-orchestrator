@@ -5,7 +5,7 @@ from pathlib import Path
 
 INPUT_FILE = "results.txt"
 OUTPUT_FILE = "exploitdb_results.txt"
-MAX_EXPLOITS_PER_VULN = 3
+MAX_EXPLOITS_PER_VULN = 20
 
 
 def run_searchsploit(query: str) -> dict:

@@ -29,8 +29,7 @@ def compile_workflow(checkpointer, interrupts_enabled: bool = True):
             "cve": "cve",
             "vuln_map": "vuln_map",
             "exploit": "exploit",
-            # "report": "report",
-            "report": END,
+            "report": "report",
             "finish": END,
         },
     )

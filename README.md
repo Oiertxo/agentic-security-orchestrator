@@ -1,14 +1,14 @@
 # Agentic Security Orchestrator
 
-An AI‑driven, containerized, multi‑agent cyber‑security framework built using **LangGraph**, **Ollama**, and a modular *supervisor/worker/executor* architecture.
+A containerized, multi‑agent cyber‑security framework built using **LangGraph**, **Ollama**, and a modular *supervisor/worker/executor* architecture. This project is a Proof of Concept and one of my Master's Theses.
 
-This project provides a controlled environment where AI agents autonomously perform:
+This project provides a controlled environment where AI agents help to perform:
 
 *   **Reconnaissance**
 *   **Scanning**
 *   **Service fingerprinting**
 *   **CVE association**
-*   **(Active development) Exploitation workflows**
+*   **Exploitation workflows**
 *   **Final Report Generation**
 
 All operations occur inside a fully isolated Docker network using a hardened Kali engine.
@@ -19,15 +19,13 @@ All operations occur inside a fully isolated Docker network using a hardened Kal
 
 The system uses **LangGraph subgraphs** to coordinate separate reasoning loops for:
 
-*   **Reconnaissance** — network scanning, host discovery, port mapping, service versioning.
+*   **Reconnaissance** — network scanning, host discovery, port mapping, service versioning, HTTP lookups.
 *   **CVE lookups** — CVE lookups in NVD v2.0.
-*   **Vulnerability mapping** — CVE to exploit mapping via ExploitDB.
-*   **(WIP) Exploitation** — safe, controlled follow-up actions based on recon findings.
+*   **Vulnerability mapping** — CVE to exploit mapping via ExploitDB and Metasploit Framework searches.
+*   **Exploitation** — controlled follow-up actions based on recon findings.
 *   **Report** — Final report summarizing the whole execution and the results found.
 
-A central **Supervisor Agent** coordinates the workflow:
-
-    User → Supervisor → Recon Subgraph → Supervisor → CVE Subgraph → Supervisor → Vuln Map Subgraph → Supervisor → Exploit Subgraph → Supervisor → Report → Supervisor → User
+A central **Supervisor Agent** coordinates the workflow
 
 ### Graphic representation
 
@@ -135,7 +133,6 @@ Runs:
 *   LangGraph supervisor
 *   Worker planner(s)
 *   Message/step routing
-*   Nmap summary parsing
 *   Structured LLM calls to perform recon/exploit decisions
 *   Subgraphs for autonomous internal reasoning and executions
 *   Final report generation with findings
@@ -145,7 +142,7 @@ Runs:
 A hardened container that:
 
 *   Executes Network mapper, CVE lookups, exploit searches, exploit executions and tools.
-*   Applies **dynamic egress firewalling** to ensure:
+*   Applies isolation to ensure:
     *   Only target hosts are reachable
     *   Gateway and self are blocked
 *   Receives tool execution requests via REST API
@@ -165,23 +162,27 @@ Isolated inside `attack_net`:
     *   Step-by-step scanning
     *   Tool selection enforced by structured schema
     *   Handles full cycle:
-        *   CIDR → host discovery → port map → version scans → summary
+        *   CIDR → host discovery → port map → version scans → HTTP lookups → summary
+    *   Uses recon AI agents
 
 *   **CVE Subgraph**
     *   Planner → Executor loop
     *   Step-by-step searches
     *   CVE lookup based on Recon findings (services and versions of each target)
+    *   Fully deterministic
 
 *   **Vuln Map Subgraph**
     *   Planner → Executor loop
     *   Step-by-step searches
     *   Vulnerability to Exploit mapping based on Recon findings and found CVEs (services and versions of each target)
+    *   Fully deterministic
 
-*   **Exploit Subgraph (actively working)**
+*   **Exploit Subgraph**
     *   Planner → Executor loop
     *   Planner selects exploit vector
     *   Executor performs exploits selecting found exploits or available tools
     *   Produces structured findings
+    *   Uses exploit AI agents
 
 ***
 
@@ -189,33 +190,15 @@ Isolated inside `attack_net`:
 
 * Full network scan
 * Automatic exclusion of gateway & self
-* Structured parsing of Nmap XML into JSON
 * Planner-driven version scanning
 * Full reasoning loop until no pending hosts
 * Clean recon summary output to user
 
 ***
 
-## 🛡️ Security Model
-
-*   **Two-network separation:**
-    *   `mgmt_net` → orchestrator ↔ kali
-    *   `attack_net` → kali ↔ targets
-
-*   **Internal-only attack net:**  
-    Orchestrator cannot reach targets directly.
-
-*   **Nmap exclusion system:**  
-    Recon engine auto-excludes:
-    *   Gateway
-    *   Kali’s IP  
-        Prevents scan noise & delays.
-
-***
-
 ## 🔧 Development Roadmap
 
-### ✔ Completed
+### Completed
 
 *   Recon subgraph with planner/executor loop
 *   LangGraph integration
@@ -228,12 +211,9 @@ Isolated inside `attack_net`:
 *   Human-in-the-Loop integration
 *   Automatic mitigation suggestions
 *   Exploit usage
+*   Vulhub targets tested
 
-### 🚧 In Progress
-
-*   More thorough testing on various targets
-
-### 🔜 Future plans
+# Possible future work
 
 *   Dedicated GUI
 *   Multi-vector exploit reasoning
@@ -313,7 +293,7 @@ No vulnerable targets and no monitoring stack are deployed.
 
 ***
 
-### 🔹 Core + Vulnerable Targets
+### 🔹 Core + Vulnerable Target
 
 Command:
 
@@ -321,7 +301,7 @@ Command:
 make lab
 ```
 
-Starts the core system **plus intentionally vulnerable targets** for attack simulation.
+Starts the core system **plus a intentionally vulnerable target** (Metasploitable2) for attack simulation.
 
 Includes:
 
@@ -334,6 +314,27 @@ Includes:
 
 ***
 
+### 🔹 Core + Monitoring
+
+Command:
+
+```bash
+make monitor
+```
+
+Starts the core system and the moritoring stack.
+
+Includes:
+
+*   Core services (`orchestrator`, `kali-engine`)
+*   **Langfuse monitoring stack** (web, worker, database, queue, storage)
+
+✅ Full execution visibility and trace analysis  
+✅ Recommended for debugging, benchmarking and prompt tuning  
+⚠️ Higher resource consumption (RAM and storage)
+
+***
+
 ### 🔹 Core + Targets + Monitoring
 
 Command:
@@ -342,13 +343,13 @@ Command:
 make full
 ```
 
-Starts the **complete stack**, including **observability and monitoring**.
+Starts the complete stack: core systems, monitoring and the Metasploitable2 container.
 
 Includes:
 
 *   Core services
-*   Vulnerable targets
-*   **Langfuse monitoring stack** (web, worker, database, queue, storage)
+*   Vulnerable target
+*   Langfuse monitoring stack
 
 ✅ Full execution visibility and trace analysis  
 ✅ Recommended for debugging, benchmarking and prompt tuning  
@@ -361,10 +362,16 @@ Monitoring components are **optional** and not required for normal operation.
 ## ⛔ Stopping and Cleanup
 
 ```bash
-make down
+make stop
 ```
 
 Stops all running containers.
+
+```bash
+make down
+```
+
+Stops and deletes all running containers.
 
 ```bash
 make clean

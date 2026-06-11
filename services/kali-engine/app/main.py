@@ -385,7 +385,9 @@ def search_exploit(request: SearchsploitRequest):
 
     unique_exploits = {exp["EDB-ID"]: exp for exp in all_results}.values()
     sorted_exploits = sorted(
-        list(unique_exploits), key=lambda x: x.get("Verified") == "1", reverse=True
+        list(unique_exploits),
+        key=lambda x: int(x["EDB-ID"]) if x.get("EDB-ID", "").isdigit() else 0,
+        reverse=True,
     )
 
     return {
@@ -437,34 +439,54 @@ def exploit(request: ExploitRequest):
         "gid=",
         "root",
         "www-data",
+        "exploit successful",
+        "username:",
+        "password:",
     ]
 
-    stdout = (result.stdout or "").strip()
-    stderr = (result.stderr or "").strip()
-    combined = f"{stdout}\n{stderr}".lower()
+    raw_stdout = ""
+    raw_stderr = ""
 
-    if any(err in combined for err in ERROR_PATTERNS):
-        status = "FAILURE"
-        details = stdout or stderr or "Exploit reported an error"
+    if hasattr(result, "stdout"):
+        raw_stdout = result.stdout or ""
+        raw_stderr = result.stderr or ""
+    elif isinstance(result, dict):
+        raw_stdout = result.get("stdout") or result.get("details") or ""
+        raw_stderr = result.get("stderr") or ""
+    else:
+        raw_stdout = str(result)
 
-    elif any(ok in combined for ok in SUCCESS_PATTERNS):
+    # 2. Forzar strings limpios
+    stdout_str = str(raw_stdout).strip()
+    stderr_str = str(raw_stderr).strip()
+
+    # 3. Consolidar el canal de búsqueda en minúsculas
+    combined = f"{stdout_str}\n{stderr_str}".lower()
+
+    # CRITICAL: Always prioritize validated exploitation signatures first
+    if any(ok in combined for ok in SUCCESS_PATTERNS):
         status = "SUCCESS"
-        details = stdout
+        details = stdout_str
+
+    # If no success signatures are present, evaluate standard error conditions
+    elif any(err in combined for err in ERROR_PATTERNS):
+        status = "FAILURE"
+        details = stdout_str or stderr_str or "Exploit reported an error"
 
     elif result.returncode != 0:
         status = "FAILURE"
-        details = stderr or stdout or "Non-zero return code"
+        details = stderr_str or stdout_str or "Non-zero return code"
 
     else:
         status = "FAILURE"
-        details = stdout or "Ambiguous exploit output"
+        details = stdout_str or "Ambiguous exploit output"
 
     return {
         "status": status,
         "details": details,
         "artifact": {
-            "stdout": stdout,
-            "stderr": stderr,
+            "stdout": stdout_str,
+            "stderr": stderr_str,
             "returncode": result.returncode,
         },
     }
