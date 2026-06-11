@@ -142,7 +142,7 @@ Runs:
 A hardened container that:
 
 *   Executes Network mapper, CVE lookups, exploit searches, exploit executions and tools.
-*   Applies firewalling to ensure:
+*   Applies isolation to ensure:
     *   Only target hosts are reachable
     *   Gateway and self are blocked
 *   Receives tool execution requests via REST API
@@ -213,12 +213,6 @@ Isolated inside `attack_net`:
 *   Exploit usage
 *   Vulhub targets tested
 
-### Available improvements in the short term
-
-*   Recon improvements to detect Web Apps and their versions more reliably
-*   Exploit subgraph improvements to be able to launch exploits in more ways
-*   Exploit subgraph improvements to be able to perform more actions than just launch exploits
-
 # Possible future work
 
 *   Dedicated GUI
@@ -229,7 +223,7 @@ Isolated inside `attack_net`:
 
 ***
 
-## 🛠 Prerequisites (Not updated yet)
+## 🛠 Prerequisites
 
 Before running the orchestrator, ensure your environment meets the following requirements:
 
@@ -299,7 +293,7 @@ No vulnerable targets and no monitoring stack are deployed.
 
 ***
 
-### 🔹 Core + Vulnerable Targets
+### 🔹 Core + Vulnerable Target
 
 Command:
 
@@ -307,7 +301,7 @@ Command:
 make lab
 ```
 
-Starts the core system **plus intentionally vulnerable targets** for attack simulation.
+Starts the core system **plus a intentionally vulnerable target** (Metasploitable2) for attack simulation.
 
 Includes:
 
@@ -320,6 +314,27 @@ Includes:
 
 ***
 
+### 🔹 Core + Monitoring
+
+Command:
+
+```bash
+make monitor
+```
+
+Starts the core system and the moritoring stack.
+
+Includes:
+
+*   Core services (`orchestrator`, `kali-engine`)
+*   **Langfuse monitoring stack** (web, worker, database, queue, storage)
+
+✅ Full execution visibility and trace analysis  
+✅ Recommended for debugging, benchmarking and prompt tuning  
+⚠️ Higher resource consumption (RAM and storage)
+
+***
+
 ### 🔹 Core + Targets + Monitoring
 
 Command:
@@ -328,13 +343,13 @@ Command:
 make full
 ```
 
-Starts the **complete stack**, including **observability and monitoring**.
+Starts the complete stack: core systems, monitoring and the Metasploitable2 container.
 
 Includes:
 
 *   Core services
-*   Vulnerable targets
-*   **Langfuse monitoring stack** (web, worker, database, queue, storage)
+*   Vulnerable target
+*   Langfuse monitoring stack
 
 ✅ Full execution visibility and trace analysis  
 ✅ Recommended for debugging, benchmarking and prompt tuning  
@@ -347,10 +362,16 @@ Monitoring components are **optional** and not required for normal operation.
 ## ⛔ Stopping and Cleanup
 
 ```bash
-make down
+make stop
 ```
 
 Stops all running containers.
+
+```bash
+make down
+```
+
+Stops and deletes all running containers.
 
 ```bash
 make clean
